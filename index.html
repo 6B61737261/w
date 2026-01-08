@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/w/vite.svg" />
+    <!-- اضافه شده: لینک به Manifest -->
+    <link rel="manifest" href="/w/manifest.json" />
+    <!-- اضافه شده: رنگ تم مرورگر موبایل -->
+    <meta name="theme-color" content="#0f172a" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>weather-app</title>
+    <script type="module" crossorigin src="/w/assets/index-DnRoL866.js"></script>
+    <link rel="stylesheet" crossorigin href="/w/assets/index-DU-B5Odj.css">
+  <link rel="manifest" href="/w/manifest.webmanifest"><script id="vite-plugin-pwa:register-sw" src="/w/registerSW.js"></script></head>
+  <body>
+    <div id="root"></div>
+    
+    <!-- اضافه شده: اسکریپت ثبت سرویس ورکر -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          // توجه: فایل سرویس ورکر باید در پوشه public باشد تا در آدرس ریشه در دسترس باشد
+          navigator.serviceWorker.register('/service-worker.js')
+            .then((registration) => {
+              console.log('ServiceWorker registered successfully: ', registration.scope);
+            })
+            .catch((err) => {
+              console.log('ServiceWorker registration failed: ', err);
+            });
+        });
+      }
+    </script>
+  </body>
+</html>

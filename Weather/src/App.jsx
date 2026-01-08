@@ -338,16 +338,19 @@ const LoadingSpinner = () => (
         </div>
 );
 
-const SplashScreen = () => (
-    <div className="fixed inset-0 z-[60] flex flex-col items-center justify-center bg-white dark:bg-slate-900 transition-colors">
+const SplashScreen = ({ darkMode }) => (
+    <div className={`fixed inset-0 z-[60] flex flex-col items-center justify-center transition-colors duration-500 ${darkMode ? 'bg-slate-900' : 'bg-blue-50'}`}>
         <div className="relative">
-            <div className="w-24 h-24 bg-blue-500 rounded-full blur-xl opacity-20 absolute top-0 left-0 animate-pulse"></div>
-            <Sun className="w-20 h-20 text-yellow-500 relative z-10 animate-spin-slow" style={{animationDuration: '3s'}} />
+            <div className={`w-32 h-32 rounded-full blur-2xl opacity-40 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-pulse ${darkMode ? 'bg-indigo-500' : 'bg-yellow-400'}`}></div>
+            {darkMode ? (
+                <Moon className="w-24 h-24 text-indigo-300 relative z-10 animate-bounce" />
+            ) : (
+                <Sun className="w-24 h-24 text-yellow-500 relative z-10 animate-spin" style={{animationDuration: '8s'}} />
+            )}
         </div>
-        <h1 className="text-3xl font-black mt-6 bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-cyan-500">هواشناسی</h1>
+        <h1 className={`text-4xl font-black mt-8 font-sans ${darkMode ? 'text-white' : 'text-blue-900'}`}>هواشناسی</h1>
         <div className="mt-4 flex flex-col items-center">
-             <span className="loader text-blue-500 w-6 h-6 border-2"></span>
-             <p className="text-sm opacity-50 mt-2 font-bold">در حال آماده‌سازی...</p>
+             <p className={`text-lg font-bold animate-pulse font-sans ${darkMode ? 'text-indigo-200' : 'text-blue-400'}`}>در حال آماده‌سازی...</p>
         </div>
     </div>
 );
@@ -647,23 +650,36 @@ const WeatherApp = () => {
     // --- Init: Load Data from DB & Request Notification ---
     useEffect(() => {
         const initApp = async () => {
-            // 1. Load Settings (Dark Mode)
-            const settings = await loadFromDB(STORE_SETTINGS);
+            // Start the minimum timer for splash screen (e.g. 2.5 seconds)
+            const splashTimer = new Promise(resolve => setTimeout(resolve, 1500));
+
+            // Load Data Promise
+            const loadDataPromise = async () => {
+                const settings = await loadFromDB(STORE_SETTINGS);
+                const citiesData = await loadFromDB(STORE_CITIES);
+                return { settings, citiesData };
+            };
+
+            // Wait for both
+            const [_, data] = await Promise.all([splashTimer, loadDataPromise()]);
+            const { settings, citiesData } = data;
+
+            // Apply Settings
             const dm = settings.find(s => s.key === 'darkMode');
             if (dm) {
                 setDarkMode(dm.value);
             }
-            
-            // 2. Load Cities (Offline Data)
-            const savedCities = await loadFromDB(STORE_CITIES);
-            if (savedCities && savedCities.length > 0) {
-                setCities(savedCities);
-                setSelectedCityId(savedCities[0].id);
-                // Trigger notification after loading if online
+
+            // Apply Cities
+            if (citiesData && citiesData.length > 0) {
+                setCities(citiesData);
+                setSelectedCityId(citiesData[0].id);
+                
+                // Notification (Logic kept same)
                 if (navigator.onLine && "Notification" in window) {
                      Notification.requestPermission().then(permission => {
                         if (permission === "granted") {
-                             const c = savedCities[0];
+                             const c = citiesData[0];
                              new Notification("وضعیت آب‌وهوا", {
                                  body: `دمای فعلی ${c.name}: ${toPersianDigits(Math.round(c.temp))} درجه`,
                                  icon: "https://cdn-icons-png.flaticon.com/512/4052/4052984.png"
@@ -675,11 +691,12 @@ const WeatherApp = () => {
                 setIsModalOpen(true);
             }
 
-            // Small delay to ensure state updates and prevent flicker
+            // Force a small delay to ensure React commits the state changes before removing splash
+            // effectively making sure the 'cities' are in the DOM when splash unmounts.
             setTimeout(() => {
                 setIsAppReady(true);
-                isSettingsLoaded.current = true; // Now we can safely save settings
-            }, 500);
+                isSettingsLoaded.current = true;
+            }, 100);
         };
 
         initApp();
@@ -888,7 +905,7 @@ const WeatherApp = () => {
 
     // --- RENDER ---
     
-    if (!isAppReady) return <SplashScreen />;
+    if (!isAppReady) return <SplashScreen darkMode={darkMode} />;
 
     if (cities.length === 0 && !isModalOpen) return null;
 

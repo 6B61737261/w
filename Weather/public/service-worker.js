@@ -42,3 +42,27 @@ self.addEventListener('activate', (event) => {
     })
   );
 });
+
+self.addEventListener('notificationclick', function(event) {
+  event.notification.close(); // بستن نوتیفیکیشن
+
+  // باز کردن یا فوکوس کردن روی تب باز شده برنامه
+  event.waitUntil(
+    clients.matchAll({
+      type: 'window',
+      includeUncontrolled: true
+    }).then(function(clientList) {
+      // اگر تبی باز است، روی آن فوکوس کن
+      for (var i = 0; i < clientList.length; i++) {
+        var client = clientList[i];
+        if (client.url === '/' && 'focus' in client) {
+          return client.focus();
+        }
+      }
+      // اگر تبی باز نیست، صفحه اصلی را باز کن
+      if (clients.openWindow) {
+        return clients.openWindow('/');
+      }
+    })
+  );
+});

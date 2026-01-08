@@ -23,6 +23,10 @@ const ChevronRight = (props) => <IconBase {...props}><path d="m9 18 6-6-6-6"/></
 const Clock = (props) => <IconBase {...props}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></IconBase>;
 const WifiOff = (props) => <IconBase {...props}><line x1="1" x2="23" y1="1" y2="23"/><path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"/><path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"/><path d="M10.71 5.05A16 16 0 0 1 22.58 9"/><path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" x2="12.01" y1="20" y2="20"/></IconBase>;
 const Download = (props) => <IconBase {...props}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></IconBase>;
+const Bell = (props) => <IconBase {...props}><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></IconBase>;
+const BellOff = (props) => <IconBase {...props}><path d="M13.73 21a2 2 0 0 1-3.46 0"/><path d="M18.63 13A17.89 17.89 0 0 1 18 8"/><path d="M6.26 6.26A5.86 5.86 0 0 0 6 8c0 7-3 9-3 9h14"/><path d="M18 8a6 6 0 0 0-9.33-5"/><line x1="1" x2="23" y1="1" y2="23"/></IconBase>;
+const Settings = (props) => <IconBase {...props}><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1-1-1.74v-.47a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></IconBase>;
+const Zap = (props) => <IconBase {...props}><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></IconBase>;
 
 // --- IndexedDB Helper ---
 const DB_NAME = 'WeatherAppDB';
@@ -248,7 +252,7 @@ const persianMonths = [
 
 // --- Utility Functions ---
 const toPersianDigits = (n) => {
-    if (n === undefined || n === null) return '-';
+    if (n === undefined || n === null || Number.isNaN(n)) return '-';
     const farsiDigits = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'];
     return n.toString().replace(/\d/g, x => farsiDigits[x]);
 };
@@ -355,6 +359,43 @@ const SplashScreen = ({ darkMode }) => (
     </div>
 );
 
+const NotificationSettingsModal = ({ isOpen, onClose, settings, onSave }) => {
+    const [localSettings, setLocalSettings] = useState(settings);
+
+    useEffect(() => {
+        if(isOpen) setLocalSettings(settings);
+    }, [isOpen, settings]);
+
+    if (!isOpen) return null;
+
+    const handleSave = () => {
+        onSave(localSettings);
+        onClose();
+    };
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose}></div>
+            <div className="relative modal-glass rounded-2xl p-6 w-full max-w-sm shadow-2xl animate-fade-in-up text-slate-900 dark:text-white">
+                <div className="flex justify-between items-center mb-6">
+                    <h3 className="text-xl font-bold flex items-center gap-2"><Bell className="w-6 h-6" /> تنظیمات برنامه</h3>
+                    <button onClick={onClose}><X className="w-5 h-5 opacity-60 hover:opacity-100" /></button>
+                </div>
+
+                <div className="space-y-6">
+                    <div className="p-4 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-200 rounded-xl text-sm font-bold">
+                        بخش نوتیفیکیشن در حال حاضر غیرفعال است.
+                    </div>
+
+                    <button onClick={handleSave} className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold shadow-lg">
+                        ذخیره
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 const AddCityModal = ({ isOpen, onClose, onAddCity }) => {
     const [input, setInput] = useState('');
     const [suggestions, setSuggestions] = useState([]);
@@ -398,10 +439,26 @@ const AddCityModal = ({ isOpen, onClose, onAddCity }) => {
                 }
                 onClose();
                 setLoading(false);
-            }, () => {
-                alert("دسترسی به موقعیت مکانی داده نشد.");
+            }, (error) => {
+                let msg = "خطا در دریافت موقعیت.";
+                switch(error.code) {
+                    case error.PERMISSION_DENIED:
+                        msg = "دسترسی به موقعیت مکانی توسط کاربر مسدود شده است. لطفا از تنظیمات مرورگر (آیکون قفل کنار آدرس) دسترسی Location را فعال کنید.";
+                        break;
+                    case error.POSITION_UNAVAILABLE:
+                        msg = "موقعیت مکانی در دسترس نیست. لطفا بررسی کنید GPS روشن باشد.";
+                        break;
+                    case error.TIMEOUT:
+                        msg = "زمان درخواست موقعیت مکانی تمام شد. لطفا دوباره تلاش کنید.";
+                        break;
+                    default:
+                        msg = "خطای ناشناخته در دریافت موقعیت.";
+                }
+                alert(msg);
                 setLoading(false);
             });
+        } else {
+            alert("مرورگر شما از قابلیت موقعیت مکانی پشتیبانی نمی‌کند.");
         }
     };
 
@@ -588,42 +645,61 @@ const DayDetailModal = ({ isOpen, onClose, day, city }) => {
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose}></div>
-            <div className="relative modal-glass rounded-3xl p-8 w-full max-w-xl shadow-2xl animate-fade-in-up text-slate-900 dark:text-white border-t border-white/20 max-h-[90vh] overflow-y-auto">
-                    <div className="absolute top-4 left-4">
-                    <button onClick={onClose}><X className="w-6 h-6 opacity-60 hover:opacity-100" /></button>
-                </div>
-                <div className="flex flex-col items-center mb-6">
-                    <h2 className="text-2xl font-black mb-1">{day.dayName}</h2>
-                    <p className="opacity-60">{city} - {day.fullDate}</p>
-                    <div className="my-4">
-                        {day.status.icon === 'Sun' && <Sun className="w-20 h-20 text-yellow-500 animate-pulse-slow" />}
-                        {day.status.icon === 'Cloud' && <Cloud className="w-20 h-20 text-blue-400" />}
-                        {day.status.icon === 'Rain' && <Droplets className="w-20 h-20 text-blue-600" />}
-                    </div>
-                    <div className="text-5xl font-black tracking-tighter mb-2">{toPersianDigits(Math.round(day.high))}°</div>
-                    <div className="text-xl opacity-70">حداقل: {toPersianDigits(Math.round(day.low))}°</div>
-                </div>
+            <div className="relative modal-glass rounded-2xl w-full max-w-sm shadow-2xl animate-fade-in-up text-slate-900 dark:text-white border-t border-white/20 max-h-[85vh] overflow-y-auto overflow-x-hidden p-0">
                 
-                {/* Hourly Chart in Modal */}
-                {day.hourly && day.hourly.length > 0 && (
-                    <div className="mb-6 bg-slate-100/50 dark:bg-black/20 rounded-2xl p-4">
-                        <div className="flex items-center gap-2 mb-2 opacity-70 text-sm font-bold">
-                            <Clock className="w-4 h-4" />
-                            <span>دمای ساعتی (۲۴ ساعته)</span>
-                        </div>
-                        <WeatherChart data={day.hourly} color="#6366f1" isHourly={true} />
+                {/* Header */}
+                <div className="sticky top-0 bg-white/50 dark:bg-slate-900/50 backdrop-blur-md p-4 flex justify-between items-center z-10 border-b border-white/10">
+                    <div>
+                        <h2 className="text-xl font-black">{day.dayName}</h2>
+                        <p className="text-xs opacity-60">{city} - {day.fullDate}</p>
                     </div>
-                )}
+                    <button onClick={onClose} className="p-1 bg-black/5 dark:bg-white/10 rounded-full"><X className="w-5 h-5 opacity-60 hover:opacity-100" /></button>
+                </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                        <div className="bg-slate-100 dark:bg-white/5 p-4 rounded-2xl flex items-center gap-3">
-                        <Wind className="w-6 h-6 text-teal-600 dark:text-teal-400" />
-                        <div><div className="text-xs opacity-50">باد</div><div className="font-bold text-lg">{toPersianDigits(Math.round(day.wind))} <span className="text-xs font-normal">km/h</span></div></div>
+                <div className="p-5 flex flex-col gap-5">
+                    {/* Main Temp & Icon */}
+                    <div className="flex items-center justify-between">
+                        <div className="flex flex-col">
+                            <div className="text-5xl font-black tracking-tighter leading-none">{toPersianDigits(Math.round(day.high))}°</div>
+                            <div className="text-sm font-bold opacity-60 mt-1">حداقل: {toPersianDigits(Math.round(day.low))}°</div>
+                        </div>
+                        <div>
+                            {day.status.icon === 'Sun' && <Sun className="w-16 h-16 text-yellow-500 animate-pulse-slow" />}
+                            {day.status.icon === 'Cloud' && <Cloud className="w-16 h-16 text-blue-400" />}
+                            {day.status.icon === 'Rain' && <Droplets className="w-16 h-16 text-blue-600" />}
+                        </div>
                     </div>
-                    <div className="bg-slate-100 dark:bg-white/5 p-4 rounded-2xl flex items-center gap-3">
-                        <Droplets className="w-6 h-6 text-blue-600 dark:text-blue-400" />
-                        <div><div className="text-xs opacity-50">بارش</div><div className="font-bold text-lg">{toPersianDigits(Math.round(day.rainChance))}%</div></div>
+
+                    {/* Compact Grid Details - Corrected Data */}
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="bg-slate-100 dark:bg-white/5 p-3 rounded-xl flex items-center gap-3">
+                            <Wind className="w-5 h-5 text-teal-500" />
+                            <div><div className="text-[10px] opacity-50 font-bold uppercase">باد</div><div className="font-bold text-sm">{toPersianDigits(Math.round(day.wind))} <span className="text-[10px]">km/h</span></div></div>
+                        </div>
+                        <div className="bg-slate-100 dark:bg-white/5 p-3 rounded-xl flex items-center gap-3">
+                            <Droplets className="w-5 h-5 text-blue-500" />
+                            <div><div className="text-[10px] opacity-50 font-bold uppercase">بارش</div><div className="font-bold text-sm">{toPersianDigits(Math.round(day.rainChance))}%</div></div>
+                        </div>
+                        <div className="bg-slate-100 dark:bg-white/5 p-3 rounded-xl flex items-center gap-3">
+                            <Droplets className="w-5 h-5 text-cyan-500" />
+                            <div><div className="text-[10px] opacity-50 font-bold uppercase">میانگین رطوبت</div><div className="font-bold text-sm">{toPersianDigits(Math.round(day.humidity))}%</div></div>
+                        </div>
+                        <div className="bg-slate-100 dark:bg-white/5 p-3 rounded-xl flex items-center gap-3">
+                            <Sun className="w-5 h-5 text-orange-500" />
+                            <div><div className="text-[10px] opacity-50 font-bold uppercase">حداکثر UV</div><div className="font-bold text-sm">{day.uv !== null && day.uv !== undefined ? toPersianDigits(day.uv.toFixed(1)) : '-'}</div></div>
+                        </div>
                     </div>
+                    
+                    {/* Hourly Chart */}
+                    {day.hourly && day.hourly.length > 0 && (
+                        <div className="bg-slate-100/50 dark:bg-black/20 rounded-xl p-3">
+                            <div className="flex items-center gap-2 mb-2 opacity-70 text-xs font-bold">
+                                <Clock className="w-3 h-3" />
+                                <span>دمای ساعتی</span>
+                            </div>
+                            <WeatherChart data={day.hourly} color="#6366f1" isHourly={true} />
+                        </div>
+                    )}
                 </div>
             </div>
         </div>
@@ -637,21 +713,53 @@ const WeatherApp = () => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isCalendarOpen, setIsCalendarOpen] = useState(false);
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+    const [isNotifSettingsOpen, setIsNotifSettingsOpen] = useState(false); // New
     const [forecastTab, setForecastTab] = useState('future'); 
     const [selectedDay, setSelectedDay] = useState(null);
     const [customLoading, setCustomLoading] = useState(false);
     const [isOnline, setIsOnline] = useState(navigator.onLine);
     const [lastUpdated, setLastUpdated] = useState(null);
-    const [isAppReady, setIsAppReady] = useState(false); // New: For splash screen
-    const [installPrompt, setInstallPrompt] = useState(null); // New: For PWA
+    const [isAppReady, setIsAppReady] = useState(false); 
+    const [installPrompt, setInstallPrompt] = useState(null); 
+    // Updated Settings State Structure
+    const [notificationSettings, setNotificationSettings] = useState({
+        enabled: false,
+        type: 'change', // 'change' (temp diff) or 'period' (time based)
+        threshold: 2, // degrees for change
+        period: 60, // minutes for period
+        lastNotifTime: 0,
+        lastNotifTemp: {} // Store last notified temp per city {cityId: temp}
+    }); 
+    
     const citiesRef = useRef(cities); 
-    const isSettingsLoaded = useRef(false); // New: To prevent DB overwrite on init
+    const notifSettingsRef = useRef(notificationSettings); // Need ref for polling
+    const isSettingsLoaded = useRef(false);
+
+    // --- Helper to Send Notification ---
+    const sendNotification = (title, body) => {
+        if (Notification.permission === 'granted' && notificationSettings.enabled) {
+            if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+                // Use SW if active (Better for mobile)
+                navigator.serviceWorker.ready.then(registration => {
+                    registration.showNotification(title, {
+                        body: body,
+                        icon: '/icon-192.png', 
+                        badge: '/icon-192.png',
+                        vibrate: [200, 100, 200]
+                    });
+                });
+            } else {
+                // Fallback to Main Thread Notification
+                new Notification(title, { body, icon: '/icon-192.png' });
+            }
+        }
+    };
 
     // --- Init: Load Data from DB & Request Notification ---
     useEffect(() => {
         const initApp = async () => {
-            // Start the minimum timer for splash screen (e.g. 2.5 seconds)
-            const splashTimer = new Promise(resolve => setTimeout(resolve, 1500));
+            // Start the minimum timer for splash screen
+            const splashTimer = new Promise(resolve => setTimeout(resolve, 2500));
 
             // Load Data Promise
             const loadDataPromise = async () => {
@@ -666,33 +774,19 @@ const WeatherApp = () => {
 
             // Apply Settings
             const dm = settings.find(s => s.key === 'darkMode');
-            if (dm) {
-                setDarkMode(dm.value);
-            }
+            if (dm) setDarkMode(dm.value);
+            
+            const notif = settings.find(s => s.key === 'notificationSettings');
+            if (notif) setNotificationSettings(notif.value);
 
             // Apply Cities
             if (citiesData && citiesData.length > 0) {
                 setCities(citiesData);
                 setSelectedCityId(citiesData[0].id);
-                
-                // Notification (Logic kept same)
-                if (navigator.onLine && "Notification" in window) {
-                     Notification.requestPermission().then(permission => {
-                        if (permission === "granted") {
-                             const c = citiesData[0];
-                             new Notification("وضعیت آب‌وهوا", {
-                                 body: `دمای فعلی ${c.name}: ${toPersianDigits(Math.round(c.temp))} درجه`,
-                                 icon: "https://cdn-icons-png.flaticon.com/512/4052/4052984.png"
-                             });
-                        }
-                     });
-                }
             } else {
                 setIsModalOpen(true);
             }
 
-            // Force a small delay to ensure React commits the state changes before removing splash
-            // effectively making sure the 'cities' are in the DOM when splash unmounts.
             setTimeout(() => {
                 setIsAppReady(true);
                 isSettingsLoaded.current = true;
@@ -726,6 +820,10 @@ const WeatherApp = () => {
         citiesRef.current = cities;
     }, [cities]);
 
+    useEffect(() => {
+        notifSettingsRef.current = notificationSettings;
+    }, [notificationSettings]);
+
     // --- Save to DB on Change ---
     useEffect(() => {
         if(cities.length > 0) {
@@ -737,6 +835,7 @@ const WeatherApp = () => {
         // Only save to DB if initial load is complete
         if (isSettingsLoaded.current) {
             saveToDB(STORE_SETTINGS, { key: 'darkMode', value: darkMode });
+            saveToDB(STORE_SETTINGS, { key: 'notificationSettings', value: notificationSettings });
         }
         
         if (darkMode) {
@@ -744,7 +843,7 @@ const WeatherApp = () => {
         } else {
             document.documentElement.classList.remove('dark');
         }
-    }, [darkMode]);
+    }, [darkMode, notificationSettings]);
 
     // --- 30s Polling Logic ---
     useEffect(() => {
@@ -752,6 +851,8 @@ const WeatherApp = () => {
             if (!navigator.onLine) return; // Don't fetch if offline
             
             const currentCities = citiesRef.current;
+            const settings = notifSettingsRef.current;
+
             if (currentCities.length === 0) return;
 
             console.log("Polling updates...");
@@ -761,15 +862,61 @@ const WeatherApp = () => {
                     return processWeatherData(data, city.name, city.id, city.custom);
                 } catch (e) {
                     console.error("Update failed for", city.name);
-                    return city; // Keep old data on error
+                    return city; 
                 }
             }));
             
             setCities(updatedCities);
             setLastUpdated(new Date());
+            
+            // --- Notification Logic ---
+            if (settings.enabled && updatedCities.length > 0) {
+                const now = Date.now();
+                let shouldNotify = false;
+                let notifBody = "";
+                let newNotifState = { ...settings };
+
+                // Get selected city or first one
+                // Use a heuristic: check the selected city first
+                const targetCity = updatedCities[0]; // Simplify to notify about main city for now
+                const lastTemp = settings.lastNotifTemp?.[targetCity.id];
+
+                if (settings.type === 'change') {
+                    // Check threshold
+                    if (lastTemp !== undefined) {
+                        if (Math.abs(targetCity.temp - lastTemp) >= settings.threshold) {
+                            shouldNotify = true;
+                            notifBody = `تغییر دما در ${targetCity.name}: از ${toPersianDigits(Math.round(lastTemp))} به ${toPersianDigits(Math.round(targetCity.temp))} درجه رسید.`;
+                        }
+                    } else {
+                        // First time recording
+                        newNotifState.lastNotifTemp = { ...newNotifState.lastNotifTemp, [targetCity.id]: targetCity.temp };
+                        setNotificationSettings(newNotifState); // Just update state, don't notify yet
+                    }
+                } else if (settings.type === 'period') {
+                    // Check time period (minutes * 60 * 1000)
+                    const periodMs = settings.period * 60 * 1000;
+                    if (now - settings.lastNotifTime > periodMs) {
+                        shouldNotify = true;
+                        notifBody = `دمای فعلی ${targetCity.name}: ${toPersianDigits(Math.round(targetCity.temp))} درجه`;
+                    }
+                }
+
+                if (shouldNotify) {
+                    sendNotification("وضعیت آب‌وهوا", notifBody);
+                    // Update settings tracking
+                    newNotifState.lastNotifTime = now;
+                    newNotifState.lastNotifTemp = { ...newNotifState.lastNotifTemp, [targetCity.id]: targetCity.temp };
+                    setNotificationSettings(newNotifState);
+                } else if (settings.type === 'change' && lastTemp === undefined) {
+                     // Init tracking if needed
+                     newNotifState.lastNotifTemp = { ...newNotifState.lastNotifTemp, [targetCity.id]: targetCity.temp };
+                     setNotificationSettings(newNotifState);
+                }
+            }
         };
 
-        const interval = setInterval(fetchAllCities, 30000); // 30 seconds
+        const interval = setInterval(fetchAllCities, 30000); // 30 seconds check cycle
         return () => clearInterval(interval);
     }, []);
 
@@ -785,7 +932,8 @@ const WeatherApp = () => {
 
     // --- Helper Fetch Functions (Refactored for reuse) ---
     const fetchRawWeatherData = async (lat, lon) => {
-         const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&daily=temperature_2m_max,temperature_2m_min,weathercode,precipitation_probability_max,windspeed_10m_max&hourly=temperature_2m&timezone=auto&past_days=7&forecast_days=7`;
+         // Updated API URL with Humidity and UV
+         const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&hourly=temperature_2m,relativehumidity_2m,uv_index&daily=temperature_2m_max,temperature_2m_min,weathercode,precipitation_probability_max,windspeed_10m_max,uv_index_max&timezone=auto&past_days=7&forecast_days=7`;
          const res = await axios.get(url);
          return res.data;
     };
@@ -793,7 +941,38 @@ const WeatherApp = () => {
     const processWeatherData = (data, name, id = Date.now(), customDays = []) => {
         const daily = data.daily;
         const hourlyTemps = data.hourly.temperature_2m;
+        const hourlyHumid = data.hourly.relativehumidity_2m;
         
+        // Find index of current hour based on closest time match
+        const nowTime = new Date().getTime();
+        const hourIndex = data.hourly.time.findIndex(t => {
+            const time = new Date(t).getTime();
+            return Math.abs(time - nowTime) < 3600000; // Find closest hour within 60 mins
+        });
+        
+        // Current real data with null checks
+        const currentHumidity = (hourIndex !== -1 && hourlyHumid) ? hourlyHumid[hourIndex] : null;
+        const currentUV = (hourIndex !== -1 && data.hourly.uv_index) ? data.hourly.uv_index[hourIndex] : null;
+        
+        // For daily max UV, find today's index in daily.time
+        // We use string match "YYYY-MM-DD"
+        const todayStr = new Date().toISOString().slice(0, 10);
+        const dayIndex = data.daily.time.indexOf(todayStr);
+        // Fallback to index 7 if date match fails (usually index 7 is today in 7-past/7-future array)
+        const todayUVIndex = dayIndex !== -1 ? dayIndex : 7; 
+        const todayMaxUV = daily.uv_index_max ? daily.uv_index_max[todayUVIndex] : null;
+
+        // Calculate daily avg humidity for each day from 24h slices
+        const getDailyHumidity = (dayIdx) => {
+            if (!hourlyHumid) return 0;
+            const start = dayIdx * 24;
+            const end = start + 24;
+            const slice = hourlyHumid.slice(start, end);
+            if (slice.length === 0) return 0;
+            const sum = slice.reduce((a, b) => a + b, 0);
+            return sum / slice.length;
+        };
+
         const allDays = daily.time.map((t, i) => ({
             dateRaw: t,
             dayName: getPersianDate(t).split(' ')[0],
@@ -803,6 +982,8 @@ const WeatherApp = () => {
             status: getWeatherStatus(daily.weathercode[i]),
             rainChance: daily.precipitation_probability_max[i] || 0,
             wind: daily.windspeed_10m_max[i],
+            uv: daily.uv_index_max ? daily.uv_index_max[i] : null,
+            humidity: getDailyHumidity(i), 
             hourly: hourlyTemps.slice(i * 24, (i + 1) * 24)
         }));
 
@@ -817,13 +998,13 @@ const WeatherApp = () => {
             temp: data.current_weather.temperature,
             status: getWeatherStatus(data.current_weather.weathercode).label,
             statusIcon: getWeatherStatus(data.current_weather.weathercode).icon,
-            high: daily.temperature_2m_max[7],
-            low: daily.temperature_2m_min[7],
+            high: daily.temperature_2m_max[todayUVIndex],
+            low: daily.temperature_2m_min[todayUVIndex],
             wind: data.current_weather.windspeed,
-            humidity: 45, // API doesn't provide current humidity in simple call, keeping mock/calc
-            uv: 5,
-            feelsLike: data.current_weather.temperature,
-            chart: futureDays[0].hourly, 
+            humidity: currentHumidity, 
+            uv: currentUV !== null ? currentUV : todayMaxUV, // Prefer real-time UV, else max
+            feelsLike: data.current_weather.temperature, 
+            chart: futureDays[0] ? futureDays[0].hourly : [], 
             future: futureDays,
             past: pastDays,
             custom: customDays
@@ -860,23 +1041,34 @@ const WeatherApp = () => {
             const startStr = fmt(sG.gy, sG.gm, sG.gd);
             const endStr = fmt(eG.gy, eG.gm, eG.gd);
 
-            const url = `https://api.open-meteo.com/v1/forecast?latitude=${city.lat}&longitude=${city.lon}&daily=temperature_2m_max,temperature_2m_min,weathercode,precipitation_probability_max,windspeed_10m_max&hourly=temperature_2m&timezone=auto&start_date=${startStr}&end_date=${endStr}`;
+            const url = `https://api.open-meteo.com/v1/forecast?latitude=${city.lat}&longitude=${city.lon}&daily=temperature_2m_max,temperature_2m_min,weathercode,precipitation_probability_max,windspeed_10m_max,uv_index_max&hourly=temperature_2m,relativehumidity_2m&timezone=auto&start_date=${startStr}&end_date=${endStr}`;
             
             const res = await axios.get(url);
             const daily = res.data.daily;
             const hourlyTemps = res.data.hourly.temperature_2m;
+            const hourlyHumid = res.data.hourly.relativehumidity_2m;
             
-            const customDays = daily.time.map((t, i) => ({
-                dateRaw: t,
-                dayName: getPersianDate(t).split(' ')[0],
-                fullDate: getPersianDayMonth(t),
-                high: daily.temperature_2m_max[i],
-                low: daily.temperature_2m_min[i],
-                status: getWeatherStatus(daily.weathercode[i]),
-                rainChance: daily.precipitation_probability_max[i] || 0,
-                wind: daily.windspeed_10m_max[i],
-                hourly: hourlyTemps.slice(i * 24, (i + 1) * 24)
-            }));
+            const customDays = daily.time.map((t, i) => {
+                // Calc daily humidity
+                const start = i * 24;
+                const end = start + 24;
+                const slice = hourlyHumid.slice(start, end);
+                const avgHum = slice.length ? slice.reduce((a,b)=>a+b,0)/slice.length : 0;
+
+                return {
+                    dateRaw: t,
+                    dayName: getPersianDate(t).split(' ')[0],
+                    fullDate: getPersianDayMonth(t),
+                    high: daily.temperature_2m_max[i],
+                    low: daily.temperature_2m_min[i],
+                    status: getWeatherStatus(daily.weathercode[i]),
+                    rainChance: daily.precipitation_probability_max[i] || 0,
+                    wind: daily.windspeed_10m_max[i],
+                    uv: daily.uv_index_max ? daily.uv_index_max[i] : null,
+                    humidity: avgHum,
+                    hourly: hourlyTemps.slice(i * 24, (i + 1) * 24)
+                };
+            });
 
             setCities(prev => prev.map(c => c.id === selectedCityId ? { ...c, custom: customDays } : c));
         } catch(e) {
@@ -941,8 +1133,11 @@ const WeatherApp = () => {
                         </div>
                     ))}
                 </div>
-                <div className="p-4 mt-auto border-t border-white/10">
-                    <button onClick={() => setDarkMode(!darkMode)} className="w-full flex items-center justify-center gap-3 py-3 rounded-xl bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 transition-all font-medium">
+                <div className="p-4 mt-auto border-t border-white/10 flex gap-2">
+                    <button onClick={() => setIsNotifSettingsOpen(true)} className={`flex-1 flex items-center justify-center gap-3 py-3 rounded-xl transition-all font-medium ${notificationSettings.enabled ? 'bg-green-500/20 text-green-600 dark:text-green-300' : 'bg-black/5 dark:bg-white/5 opacity-60'}`}>
+                        {notificationSettings.enabled ? <Bell className="w-5 h-5" /> : <BellOff className="w-5 h-5" />}
+                    </button>
+                    <button onClick={() => setDarkMode(!darkMode)} className="flex-[3] flex items-center justify-center gap-3 py-3 rounded-xl bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 transition-all font-medium">
                         {darkMode ? <><Sun className="w-5 h-5 text-yellow-400" /><span>حالت روز</span></> : <><Moon className="w-5 h-5 text-indigo-600" /><span>حالت شب</span></>}
                     </button>
                 </div>
@@ -959,13 +1154,27 @@ const WeatherApp = () => {
                 <div className="absolute top-[-10%] left-[-10%] w-96 h-96 bg-blue-500/20 rounded-full blur-[100px] pointer-events-none mix-blend-overlay"></div>
                 <div className="absolute bottom-[-10%] right-[10%] w-80 h-80 bg-orange-500/20 rounded-full blur-[100px] pointer-events-none mix-blend-overlay"></div>
 
-                {/* Mobile Header */}
-                    <div className="lg:hidden flex items-center justify-between p-4 glass-panel z-30 relative mb-6 rounded-2xl">
-                    <div className="flex items-center gap-2"><h1 className="text-xl font-bold">{selectedCity.name}</h1><span className="text-sm opacity-70 font-bold">{toPersianDigits(Math.round(selectedCity.temp))}°</span></div>
-                    <div className="flex gap-2">
-                        <button onClick={() => setIsSidebarOpen(true)} className="p-2 bg-white/10 rounded-lg"><Menu className="w-6 h-6" /></button>
+                {/* Mobile Header (Updated) */}
+                    <div className="lg:hidden flex flex-col gap-4 mb-6 z-30 relative">
+                        <div className="flex items-center justify-between p-4 glass-panel rounded-2xl">
+                            <div className="flex items-center gap-2">
+                                <h1 className="text-xl font-bold">{selectedCity.name}</h1>
+                                <span className="text-sm opacity-70 font-bold">{toPersianDigits(Math.round(selectedCity.temp))}°</span>
+                            </div>
+                            <div className="flex gap-2">
+                                <button onClick={() => setIsSidebarOpen(true)} className="p-2 bg-white/10 rounded-lg"><Menu className="w-6 h-6" /></button>
+                            </div>
+                        </div>
+                        {/* Mobile Status Bar */}
+                        <div className="flex items-center justify-between px-2">
+                             <div className="flex items-center gap-2 text-xs font-medium opacity-70">
+                                <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-green-400' : 'bg-red-500'}`}></span>
+                                {isOnline ? 'آنلاین' : 'آفلاین'}
+                                {lastUpdated && <span>- {lastUpdated.toLocaleTimeString('fa-IR', {hour: '2-digit', minute:'2-digit'})}</span>}
+                             </div>
+                             {notificationSettings.enabled && <Bell className="w-3 h-3 text-blue-400 animate-pulse" />}
+                        </div>
                     </div>
-                </div>
 
                 {/* Header Info (Desktop) */}
                 <header className="hidden lg:flex justify-between items-center mb-8 gap-4 z-10 text-right">
@@ -1011,9 +1220,9 @@ const WeatherApp = () => {
 
                 {/* Details */}
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-8 z-10">
-                    <div className="glass-panel p-4 lg:p-5 rounded-2xl flex flex-col gap-2 hover:bg-white/5 transition-colors"><div className="flex items-center gap-2 opacity-60 text-sm"><Droplets className="w-4 h-4" /><span>رطوبت (تخمینی)</span></div><span className="text-2xl font-bold">{toPersianDigits(selectedCity.humidity)}٪</span><div className="w-full h-1 bg-gray-200/20 rounded-full mt-auto"><div className="h-full bg-blue-400 rounded-full" style={{width: `${selectedCity.humidity}%`}}></div></div></div>
+                    <div className="glass-panel p-4 lg:p-5 rounded-2xl flex flex-col gap-2 hover:bg-white/5 transition-colors"><div className="flex items-center gap-2 opacity-60 text-sm"><Droplets className="w-4 h-4" /><span>رطوبت</span></div><span className="text-2xl font-bold">{selectedCity.humidity !== null ? toPersianDigits(Math.round(selectedCity.humidity)) : '-'}٪</span><div className="w-full h-1 bg-gray-200/20 rounded-full mt-auto"><div className="h-full bg-blue-400 rounded-full" style={{width: `${selectedCity.humidity || 0}%`}}></div></div></div>
                     <div className="glass-panel p-4 lg:p-5 rounded-2xl flex flex-col gap-2 hover:bg-white/5 transition-colors"><div className="flex items-center gap-2 opacity-60 text-sm"><Wind className="w-4 h-4" /><span>سرعت باد</span></div><span className="text-2xl font-bold">{toPersianDigits(Math.round(selectedCity.wind))} <span className="text-sm font-normal">km/h</span></span><div className="text-xs opacity-50 mt-auto">جهت: متغیر</div></div>
-                    <div className="glass-panel p-4 lg:p-5 rounded-2xl flex flex-col gap-2 hover:bg-white/5 transition-colors"><div className="flex items-center gap-2 opacity-60 text-sm"><Sun className="w-4 h-4" /><span>شاخص UV</span></div><span className="text-2xl font-bold">{toPersianDigits(selectedCity.uv)}</span><div className="text-xs opacity-50 mt-auto">{selectedCity.uv > 5 ? 'زیاد - محافظت شود' : 'کم - ایمن'}</div></div>
+                    <div className="glass-panel p-4 lg:p-5 rounded-2xl flex flex-col gap-2 hover:bg-white/5 transition-colors"><div className="flex items-center gap-2 opacity-60 text-sm"><Sun className="w-4 h-4" /><span>شاخص UV</span></div><span className="text-2xl font-bold">{selectedCity.uv !== null ? toPersianDigits(selectedCity.uv.toFixed(1)) : '-'}</span><div className="text-xs opacity-50 mt-auto">{selectedCity.uv > 5 ? 'زیاد - محافظت شود' : 'کم - ایمن'}</div></div>
                     <div className="glass-panel p-4 lg:p-5 rounded-2xl flex flex-col gap-2 hover:bg-white/5 transition-colors"><div className="flex items-center gap-2 opacity-60 text-sm"><Cloud className="w-4 h-4" /><span>وضعیت</span></div><span className="text-xl font-bold">{selectedCity.status}</span><div className="text-xs opacity-50 mt-auto">دید افقی: خوب</div></div>
                 </div>
 
@@ -1058,6 +1267,12 @@ const WeatherApp = () => {
             <AddCityModal isOpen={isModalOpen} onClose={() => { if(cities.length > 0) setIsModalOpen(false); }} onAddCity={handleAddCity} />
             <CalendarModal isOpen={isCalendarOpen} onClose={() => setIsCalendarOpen(false)} onSelectRange={handleSelectRange} />
             <DayDetailModal isOpen={!!selectedDay} onClose={() => setSelectedDay(null)} day={selectedDay} city={selectedCity.name} />
+            <NotificationSettingsModal 
+                isOpen={isNotifSettingsOpen} 
+                onClose={() => setIsNotifSettingsOpen(false)} 
+                settings={notificationSettings}
+                onSave={setNotificationSettings}
+            />
         </div>
     );
 };

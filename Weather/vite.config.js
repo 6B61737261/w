@@ -9,9 +9,9 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
       manifest: {
-        name: 'Weather App Pro',
+        name: 'Weather',
         short_name: 'Weather',
-        description: 'اپلیکیشن هواشناسی حرفه‌ای',
+        description: 'هواشناسی',
         theme_color: '#ffffff',
         icons: [
           {

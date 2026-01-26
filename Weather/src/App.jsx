@@ -27,6 +27,7 @@ const Bell = (props) => <IconBase {...props}><path d="M6 8a6 6 0 0 1 12 0c0 7 3 
 const BellOff = (props) => <IconBase {...props}><path d="M13.73 21a2 2 0 0 1-3.46 0"/><path d="M18.63 13A17.89 17.89 0 0 1 18 8"/><path d="M6.26 6.26A5.86 5.86 0 0 0 6 8c0 7-3 9-3 9h14"/><path d="M18 8a6 6 0 0 0-9.33-5"/><line x1="1" x2="23" y1="1" y2="23"/></IconBase>;
 const Settings = (props) => <IconBase {...props}><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1-1-1.74v-.47a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></IconBase>;
 const Zap = (props) => <IconBase {...props}><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></IconBase>;
+const RefreshCcw = (props) => <IconBase {...props}><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></IconBase>;
 
 // --- IndexedDB Helper ---
 const DB_NAME = 'WeatherAppDB';
@@ -846,6 +847,8 @@ const WeatherApp = () => {
     // --- Init: Load Data from DB & Request Notification ---
     const initApp = async () => {
         setSplashError(null);
+        let hasLocalData = false;
+
         try {
             // Load Settings First
             const settings = await loadFromDB(STORE_SETTINGS);
@@ -860,6 +863,7 @@ const WeatherApp = () => {
                 setCities(citiesData);
                 setSelectedCityId(citiesData[0].id);
                 setSplashHasData(true);
+                hasLocalData = true;
             }
 
             // Start API Update with Timeout
@@ -891,16 +895,12 @@ const WeatherApp = () => {
 
         } catch (error) {
             console.error("Init Error:", error);
-            if (error.message === 'TIMEOUT') {
-                if (splashHasData) {
-                    setSplashError("ارتباط با سرور زمان‌بر شد.");
-                    // Allow user to choose "Continue Offline"
-                } else {
-                    setSplashError("ارتباط با سرور برقرار نشد. لطفا اینترنت خود را بررسی کنید.");
-                }
-            } else {
-                 // Network Error
-                 setSplashError("خطا در دریافت اطلاعات. لطفا اتصال اینترنت را بررسی کنید.");
+            // Single unified message as requested
+            setSplashError("ارتباط برقرار نشد");
+            
+            // Ensure button shows if we have local data (checking local variable to be sure)
+            if (hasLocalData) {
+                setSplashHasData(true);
             }
         }
     };
@@ -958,80 +958,83 @@ const WeatherApp = () => {
         }
     }, [darkMode, notificationSettings]);
 
-    // --- 30s Polling Logic ---
-    useEffect(() => {
-        const fetchAllCities = async () => {
-            if (!navigator.onLine || !isAppReady) return; // Don't fetch if offline or not ready
-            
-            const currentCities = citiesRef.current;
-            const settings = notifSettingsRef.current;
+    // --- Refactored Refresh Function for Manual Use & Polling ---
+    const refreshAllCities = async () => {
+        if (!navigator.onLine) return; // Don't fetch if offline
+        
+        const currentCities = citiesRef.current;
+        const settings = notifSettingsRef.current;
 
-            if (currentCities.length === 0) return;
+        if (currentCities.length === 0) return;
 
-            console.log("Polling updates...");
-            const updatedCities = await Promise.all(currentCities.map(async (city) => {
-                try {
-                    const data = await fetchRawWeatherData(city.lat, city.lon);
-                    return processWeatherData(data, city.name, city.id, city.custom);
-                } catch (e) {
-                    console.error("Update failed for", city.name);
-                    return city; 
-                }
-            }));
-            
-            setCities(updatedCities);
-            setLastUpdated(new Date());
-            
-            // --- Notification Logic ---
-            if (settings.enabled && updatedCities.length > 0) {
-                const now = Date.now();
-                let shouldNotify = false;
-                let notifBody = "";
-                let newNotifState = { ...settings };
+        console.log("Refreshing updates...");
+        const updatedCities = await Promise.all(currentCities.map(async (city) => {
+            try {
+                const data = await fetchRawWeatherData(city.lat, city.lon);
+                return processWeatherData(data, city.name, city.id, city.custom);
+            } catch (e) {
+                console.error("Update failed for", city.name);
+                return city; 
+            }
+        }));
+        
+        setCities(updatedCities);
+        setLastUpdated(new Date());
+        
+        // --- Notification Logic ---
+        if (settings.enabled && updatedCities.length > 0) {
+            const now = Date.now();
+            let shouldNotify = false;
+            let notifBody = "";
+            let newNotifState = { ...settings };
 
-                // Get selected city or first one
-                // Use a heuristic: check the selected city first
-                const targetCity = updatedCities[0]; // Simplify to notify about main city for now
-                const lastTemp = settings.lastNotifTemp?.[targetCity.id];
+            // Get selected city or first one
+            // Use a heuristic: check the selected city first
+            const targetCity = updatedCities[0]; // Simplify to notify about main city for now
+            const lastTemp = settings.lastNotifTemp?.[targetCity.id];
 
-                if (settings.type === 'change') {
-                    // Check threshold
-                    if (lastTemp !== undefined) {
-                        if (Math.abs(targetCity.temp - lastTemp) >= settings.threshold) {
-                            shouldNotify = true;
-                            notifBody = `تغییر دما در ${targetCity.name}: از ${toPersianDigits(Math.round(lastTemp))} به ${toPersianDigits(Math.round(targetCity.temp))} درجه رسید.`;
-                        }
-                    } else {
-                        // First time recording
-                        newNotifState.lastNotifTemp = { ...newNotifState.lastNotifTemp, [targetCity.id]: targetCity.temp };
-                        setNotificationSettings(newNotifState); // Just update state, don't notify yet
-                    }
-                } else if (settings.type === 'period') {
-                    // Check time period (minutes * 60 * 1000)
-                    const periodMs = settings.period * 60 * 1000;
-                    if (now - settings.lastNotifTime > periodMs) {
+            if (settings.type === 'change') {
+                // Check threshold
+                if (lastTemp !== undefined) {
+                    if (Math.abs(targetCity.temp - lastTemp) >= settings.threshold) {
                         shouldNotify = true;
-                        notifBody = `دمای فعلی ${targetCity.name}: ${toPersianDigits(Math.round(targetCity.temp))} درجه`;
+                        notifBody = `تغییر دما در ${targetCity.name}: از ${toPersianDigits(Math.round(lastTemp))} به ${toPersianDigits(Math.round(targetCity.temp))} درجه رسید.`;
                     }
-                }
-
-                if (shouldNotify) {
-                    sendNotification("وضعیت آب‌وهوا", notifBody);
-                    // Update settings tracking
-                    newNotifState.lastNotifTime = now;
+                } else {
+                    // First time recording
                     newNotifState.lastNotifTemp = { ...newNotifState.lastNotifTemp, [targetCity.id]: targetCity.temp };
-                    setNotificationSettings(newNotifState);
-                } else if (settings.type === 'change' && lastTemp === undefined) {
-                     // Init tracking if needed
-                     newNotifState.lastNotifTemp = { ...newNotifState.lastNotifTemp, [targetCity.id]: targetCity.temp };
-                     setNotificationSettings(newNotifState);
+                    setNotificationSettings(newNotifState); // Just update state, don't notify yet
+                }
+            } else if (settings.type === 'period') {
+                // Check time period (minutes * 60 * 1000)
+                const periodMs = settings.period * 60 * 1000;
+                if (now - settings.lastNotifTime > periodMs) {
+                    shouldNotify = true;
+                    notifBody = `دمای فعلی ${targetCity.name}: ${toPersianDigits(Math.round(targetCity.temp))} درجه`;
                 }
             }
-        };
 
-        const interval = setInterval(fetchAllCities, 30000); // 30 seconds check cycle
+            if (shouldNotify) {
+                sendNotification("وضعیت آب‌وهوا", notifBody);
+                // Update settings tracking
+                newNotifState.lastNotifTime = now;
+                newNotifState.lastNotifTemp = { ...newNotifState.lastNotifTemp, [targetCity.id]: targetCity.temp };
+                setNotificationSettings(newNotifState);
+            } else if (settings.type === 'change' && lastTemp === undefined) {
+                    // Init tracking if needed
+                    newNotifState.lastNotifTemp = { ...newNotifState.lastNotifTemp, [targetCity.id]: targetCity.temp };
+                    setNotificationSettings(newNotifState);
+            }
+        }
+    };
+
+    // --- 30s Polling Logic ---
+    useEffect(() => {
+        const interval = setInterval(() => {
+            if(isAppReady) refreshAllCities();
+        }, 30000); // 30 seconds check cycle
         return () => clearInterval(interval);
-    }, []);
+    }, [isAppReady]);
 
     const handleInstallClick = () => {
         if (!installPrompt) return;
@@ -1205,6 +1208,7 @@ const WeatherApp = () => {
                                 <span className="text-sm opacity-70 font-bold">{toPersianDigits(Math.round(selectedCity.temp))}°</span>
                             </div>
                             <div className="flex gap-2">
+                                <button onClick={refreshAllCities} className="p-2 bg-white/10 rounded-lg"><RefreshCcw className="w-6 h-6" /></button>
                                 <button onClick={() => setIsSidebarOpen(true)} className="p-2 bg-white/10 rounded-lg"><Menu className="w-6 h-6" /></button>
                             </div>
                         </div>
@@ -1236,6 +1240,7 @@ const WeatherApp = () => {
                             <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-green-400 animate-pulse' : 'bg-red-500'}`}></span>
                             {isOnline ? 'بروزرسانی: آنلاین' : 'حالت آفلاین'}
                             {lastUpdated && <span className="text-xs opacity-50 mx-1">{lastUpdated.toLocaleTimeString('fa-IR')}</span>}
+                            <button onClick={refreshAllCities} className="mr-2 hover:bg-black/10 dark:hover:bg-white/20 p-1 rounded-full transition-colors" title="بروزرسانی"><RefreshCcw className="w-4 h-4" /></button>
                         </div>
                     </div>
                 </header>

@@ -28,6 +28,7 @@ const BellOff = (props) => <IconBase {...props}><path d="M13.73 21a2 2 0 0 1-3.4
 const Settings = (props) => <IconBase {...props}><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1-1-1.74v-.47a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></IconBase>;
 const Zap = (props) => <IconBase {...props}><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></IconBase>;
 const RefreshCcw = (props) => <IconBase {...props}><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></IconBase>;
+const Check = (props) => <IconBase {...props}><polyline points="20 6 9 17 4 12"/></IconBase>;
 
 // --- IndexedDB Helper ---
 const DB_NAME = 'WeatherAppDB';
@@ -463,6 +464,53 @@ const OfflineAlertModal = ({ isOpen, onClose }) => {
     );
 };
 
+const InstallPromptModal = ({ isOpen, onClose, onInstall }) => {
+    const [dontShow, setDontShow] = useState(false);
+
+    useEffect(() => {
+        if(isOpen) setDontShow(false);
+    }, [isOpen]);
+
+    if (!isOpen) return null;
+
+    const handleClose = () => {
+        onClose(dontShow); // Pass the preference back
+    };
+
+    return (
+        <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center p-4 pointer-events-none">
+            <div className="absolute inset-0 bg-black/40 backdrop-blur-sm pointer-events-auto" onClick={handleClose}></div>
+            <div className="relative bg-white dark:bg-slate-800 rounded-2xl p-6 w-full max-w-sm shadow-2xl animate-fade-in-up pointer-events-auto border border-blue-500/20">
+                <div className="flex justify-between items-start mb-4">
+                    <div>
+                        <h3 className="text-xl font-bold text-slate-900 dark:text-white">نصب اپلیکیشن</h3>
+                        <p className="text-sm text-slate-600 dark:text-slate-300 mt-1">برای دسترسی بهتر و آفلاین، اپلیکیشن را نصب کنید. همچنین می‌توانید بعداً از طریق منو آن را نصب کنید.</p>
+                    </div>
+                    <div className="bg-blue-100 dark:bg-blue-900/30 p-3 rounded-xl text-blue-600 dark:text-blue-400">
+                        <Download className="w-6 h-6" />
+                    </div>
+                </div>
+                
+                <div className="flex items-center gap-3 mb-6 cursor-pointer group" onClick={() => setDontShow(!dontShow)}>
+                    <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${dontShow ? 'bg-blue-600 border-blue-600' : 'border-slate-300 dark:border-slate-500 group-hover:border-blue-500'}`}>
+                        {dontShow && <Check className="w-3.5 h-3.5 text-white stroke-[3]" />}
+                    </div>
+                    <span className="text-sm font-bold text-slate-600 dark:text-slate-300 select-none">دیگر نمایش نده</span>
+                </div>
+
+                <div className="flex gap-3">
+                    <button onClick={handleClose} className="flex-1 py-3 text-slate-600 dark:text-slate-300 font-bold hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition-colors">
+                        بعداً
+                    </button>
+                    <button onClick={onInstall} className="flex-1 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold shadow-lg transition-all">
+                        نصب کن
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 const NotificationSettingsModal = ({ isOpen, onClose, settings, onSave }) => {
     const [localSettings, setLocalSettings] = useState(settings);
 
@@ -831,6 +879,10 @@ const WeatherApp = () => {
     const [splashHasData, setSplashHasData] = useState(false);
     const [offlineAlertOpen, setOfflineAlertOpen] = useState(false); // New State for Offline Alert
     const [isRefreshing, setIsRefreshing] = useState(false); // New State for Refresh Button
+    const [showInstallModal, setShowInstallModal] = useState(false); // New State for Install Modal
+    
+    // Ref to hold the dismiss preference synchronously for the event listener
+    const isInstallDismissedRef = useRef(false);
 
     // Updated Settings State Structure
     const [notificationSettings, setNotificationSettings] = useState({
@@ -878,6 +930,12 @@ const WeatherApp = () => {
             if (dm) setDarkMode(dm.value);
             const notif = settings.find(s => s.key === 'notificationSettings');
             if (notif) setNotificationSettings(notif.value);
+            
+            // Check install dismissed setting
+            const dismissed = settings.find(s => s.key === 'installPromptDismissed');
+            if (dismissed && dismissed.value === true) {
+                isInstallDismissedRef.current = true;
+            }
 
             // Load Cached Cities
             const citiesData = await loadFromDB(STORE_CITIES);
@@ -942,6 +1000,10 @@ const WeatherApp = () => {
         const handleInstallPrompt = (e) => {
             e.preventDefault();
             setInstallPrompt(e);
+            // Only show if not dismissed previously
+            if (!isInstallDismissedRef.current) {
+                setShowInstallModal(true);
+            }
         };
         window.addEventListener('beforeinstallprompt', handleInstallPrompt);
 
@@ -1092,7 +1154,16 @@ const WeatherApp = () => {
             if (choiceResult.outcome === 'accepted') {
                 setInstallPrompt(null);
             }
+            setShowInstallModal(false); // Close modal regardless
         });
+    };
+    
+    const handleInstallModalClose = (dontShow) => {
+        setShowInstallModal(false);
+        if (dontShow) {
+            isInstallDismissedRef.current = true;
+            saveToDB(STORE_SETTINGS, { key: 'installPromptDismissed', value: true });
+        }
     };
 
     // --- Helper Fetch Functions (Refactored for reuse) ---
@@ -1377,6 +1448,7 @@ const WeatherApp = () => {
                 onSave={setNotificationSettings}
             />
             <OfflineAlertModal isOpen={offlineAlertOpen} onClose={() => setOfflineAlertOpen(false)} />
+            <InstallPromptModal isOpen={showInstallModal} onClose={handleInstallModalClose} onInstall={handleInstallClick} />
         </div>
     );
 };

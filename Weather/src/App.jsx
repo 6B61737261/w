@@ -9,7 +9,6 @@ const IconBase = ({ children, ...props }) => (
 const Cloud = (props) => <IconBase {...props}><path d="M17.5 19c0-1.7-1.3-3-3-3h-11c-1.7 0-3 1.3-3 3s1.3 3 3 3h11c1.7 0 3-1.3 3-3z"/><path d="M17.5 19c2.5 0 4.5-2 4.5-4.5S20 10 17.5 10c-.3 0-.6.1-.9.2"/><path d="M16.4 10.2A6 6 0 1 0 5.4 13.9"/></IconBase>;
 const Sun = (props) => <IconBase {...props}><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></IconBase>;
 const Moon = (props) => <IconBase {...props}><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></IconBase>;
-const MapPin = (props) => <IconBase {...props}><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></IconBase>;
 const Search = (props) => <IconBase {...props}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></IconBase>;
 const Wind = (props) => <IconBase {...props}><path d="M17.7 7.7a2.5 2.5 0 1 1 1.8 4.3H2"/><path d="M9.6 4.6A2 2 0 1 1 11 8H2"/><path d="M12.6 19.4A2 2 0 1 0 14 16H2"/></IconBase>;
 const Droplets = (props) => <IconBase {...props}><path d="M7 16.3c2.2 0 4-1.8 4-4 0-2-2-4-4-4-2 0-4 2-4 4 0 2.2 1.8 4 4 4z"/><path d="M17 16.3c2.2 0 4-1.8 4-4 0-2-2-4-4-4-2 0-4 2-4 4 0 2.2 1.8 4 4 4z"/><path d="M12 12c2.2 0 4-1.8 4-4 0-2-2-4-4-4-2 0-4 2-4 4 0 2.2 1.8 4 4 4z"/></IconBase>;
@@ -577,43 +576,6 @@ const AddCityModal = ({ isOpen, onClose, onAddCity }) => {
         return () => clearTimeout(timer);
     }, [input]);
 
-    const handleLocationClick = () => {
-        if (navigator.geolocation) {
-            setLoading(true);
-            navigator.geolocation.getCurrentPosition(async (position) => {
-                const { latitude, longitude } = position.coords;
-                try {
-                        const res = await axios.get(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=fa`);
-                        const cityName = res.data.locality || res.data.city || 'موقعیت شما';
-                        onAddCity({ name: cityName, lat: latitude, lon: longitude });
-                } catch(e) {
-                        onAddCity({ name: 'موقعیت من', lat: latitude, lon: longitude });
-                }
-                onClose();
-                setLoading(false);
-            }, (error) => {
-                let msg = "خطا در دریافت موقعیت.";
-                switch(error.code) {
-                    case error.PERMISSION_DENIED:
-                        msg = "دسترسی به موقعیت مکانی توسط کاربر مسدود شده است. لطفا از تنظیمات مرورگر (آیکون قفل کنار آدرس) دسترسی Location را فعال کنید.";
-                        break;
-                    case error.POSITION_UNAVAILABLE:
-                        msg = "موقعیت مکانی در دسترس نیست. لطفا بررسی کنید GPS روشن باشد.";
-                        break;
-                    case error.TIMEOUT:
-                        msg = "زمان درخواست موقعیت مکانی تمام شد. لطفا دوباره تلاش کنید.";
-                        break;
-                    default:
-                        msg = "خطای ناشناخته در دریافت موقعیت.";
-                }
-                alert(msg);
-                setLoading(false);
-            });
-        } else {
-            alert("مرورگر شما از قابلیت موقعیت مکانی پشتیبانی نمی‌کند.");
-        }
-    };
-
     if (!isOpen) return null;
 
     return (
@@ -624,11 +586,6 @@ const AddCityModal = ({ isOpen, onClose, onAddCity }) => {
                     <h3 className="text-xl font-bold">افزودن شهر جدید</h3>
                     <button onClick={onClose}><X className="w-5 h-5 opacity-60 hover:opacity-100" /></button>
                 </div>
-                
-                <button type="button" onClick={handleLocationClick} className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-blue-500/10 hover:bg-blue-500/20 text-blue-700 dark:text-blue-300 transition-colors border border-blue-500/20 mb-4">
-                    {loading ? <span className="animate-spin text-xl">⏳</span> : <MapPin className="w-5 h-5" />}
-                    <span>یافتن موقعیت مکانی من</span>
-                </button>
                 
                 <div className="relative">
                     <input type="text" placeholder="نام شهر را بنویسید (مثلا: مشهد)" className="w-full pr-10 pl-4 py-3 rounded-xl bg-slate-100 dark:bg-slate-700/50 border-none focus:ring-2 focus:ring-blue-500 outline-none transition-colors text-slate-900 dark:text-white placeholder:text-slate-500 dark:placeholder:text-slate-400" value={input} onChange={(e) => setInput(e.target.value)} autoFocus />

@@ -278,6 +278,80 @@ const getWeatherStatus = (code) => {
     return { label: 'نامشخص', icon: 'Sun' };
 };
 
+// --- MOVED FUNCTIONS (For usage in initApp) ---
+const fetchRawWeatherData = async (lat, lon) => {
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&hourly=temperature_2m,relativehumidity_2m,uv_index&daily=temperature_2m_max,temperature_2m_min,weathercode,precipitation_probability_max,windspeed_10m_max,uv_index_max&timezone=auto&past_days=7&forecast_days=7`;
+    const res = await axios.get(url);
+    return res.data;
+};
+
+const processWeatherData = (data, name, id = Date.now(), customDays = []) => {
+    const daily = data.daily;
+    const hourlyTemps = data.hourly.temperature_2m;
+    const hourlyHumid = data.hourly.relativehumidity_2m;
+    
+    const nowTime = new Date().getTime();
+    const hourIndex = data.hourly.time.findIndex(t => {
+        const time = new Date(t).getTime();
+        return Math.abs(time - nowTime) < 3600000;
+    });
+    
+    const currentHumidity = (hourIndex !== -1 && hourlyHumid) ? hourlyHumid[hourIndex] : null;
+    const currentUV = (hourIndex !== -1 && data.hourly.uv_index) ? data.hourly.uv_index[hourIndex] : null;
+    
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const dayIndex = data.daily.time.indexOf(todayStr);
+    const todayUVIndex = dayIndex !== -1 ? dayIndex : 7; 
+    const todayMaxUV = daily.uv_index_max ? daily.uv_index_max[todayUVIndex] : null;
+
+    const getDailyHumidity = (dayIdx) => {
+        if (!hourlyHumid) return 0;
+        const start = dayIdx * 24;
+        const end = start + 24;
+        const slice = hourlyHumid.slice(start, end);
+        if (slice.length === 0) return 0;
+        const sum = slice.reduce((a, b) => a + b, 0);
+        return sum / slice.length;
+    };
+
+    const allDays = daily.time.map((t, i) => ({
+        dateRaw: t,
+        dayName: getPersianDate(t).split(' ')[0],
+        fullDate: getPersianDayMonth(t),
+        high: daily.temperature_2m_max[i],
+        low: daily.temperature_2m_min[i],
+        status: getWeatherStatus(daily.weathercode[i]),
+        rainChance: daily.precipitation_probability_max[i] || 0,
+        wind: daily.windspeed_10m_max[i],
+        uv: daily.uv_index_max ? daily.uv_index_max[i] : null,
+        humidity: getDailyHumidity(i), 
+        hourly: hourlyTemps.slice(i * 24, (i + 1) * 24)
+    }));
+
+    const pastDays = allDays.slice(0, 7).reverse();
+    const futureDays = allDays.slice(7);
+
+    return {
+        id: id,
+        name: name,
+        lat: data.latitude,
+        lon: data.longitude,
+        temp: data.current_weather.temperature,
+        status: getWeatherStatus(data.current_weather.weathercode).label,
+        statusIcon: getWeatherStatus(data.current_weather.weathercode).icon,
+        high: daily.temperature_2m_max[todayUVIndex],
+        low: daily.temperature_2m_min[todayUVIndex],
+        wind: data.current_weather.windspeed,
+        humidity: currentHumidity, 
+        uv: currentUV !== null ? currentUV : todayMaxUV, 
+        feelsLike: data.current_weather.temperature, 
+        chart: futureDays[0] ? futureDays[0].hourly : [], 
+        future: futureDays,
+        past: pastDays,
+        custom: customDays
+    };
+};
+
 // --- Components ---
 
 const WeatherChart = ({ data, color, isHourly }) => {
@@ -342,7 +416,7 @@ const LoadingSpinner = () => (
         </div>
 );
 
-const SplashScreen = ({ darkMode }) => (
+const SplashScreen = ({ darkMode, error, onRetry, onContinueOffline, hasData }) => (
     <div className={`fixed inset-0 z-[60] flex flex-col items-center justify-center transition-colors duration-500 ${darkMode ? 'bg-slate-900' : 'bg-blue-50'}`}>
         <div className="relative">
             <div className={`w-32 h-32 rounded-full blur-2xl opacity-40 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-pulse ${darkMode ? 'bg-indigo-500' : 'bg-yellow-400'}`}></div>
@@ -353,8 +427,18 @@ const SplashScreen = ({ darkMode }) => (
             )}
         </div>
         <h1 className={`text-4xl font-black mt-8 font-sans ${darkMode ? 'text-white' : 'text-blue-900'}`}>هواشناسی</h1>
-        <div className="mt-4 flex flex-col items-center">
-             <p className={`text-lg font-bold animate-pulse font-sans ${darkMode ? 'text-indigo-200' : 'text-blue-400'}`}>در حال آماده‌سازی...</p>
+        <div className="mt-8 flex flex-col items-center px-6 text-center">
+             {!error ? (
+                <p className={`text-lg font-bold animate-pulse font-sans ${darkMode ? 'text-indigo-200' : 'text-blue-400'}`}>در حال دریافت آخرین اطلاعات...</p>
+             ) : (
+                <div className="flex flex-col gap-4 items-center animate-fade-in-up">
+                    <p className="text-red-500 font-bold max-w-xs">{error}</p>
+                    <button onClick={onRetry} className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl shadow-lg font-bold transition-all">تلاش مجدد</button>
+                    {hasData && (
+                        <button onClick={onContinueOffline} className="text-sm font-bold opacity-70 hover:opacity-100 dark:text-white text-slate-700 underline underline-offset-4">ادامه به صورت آفلاین (داده‌های قبلی)</button>
+                    )}
+                </div>
+             )}
         </div>
     </div>
 );
@@ -721,6 +805,10 @@ const WeatherApp = () => {
     const [lastUpdated, setLastUpdated] = useState(null);
     const [isAppReady, setIsAppReady] = useState(false); 
     const [installPrompt, setInstallPrompt] = useState(null); 
+    // New State for Splash Error
+    const [splashError, setSplashError] = useState(null);
+    const [splashHasData, setSplashHasData] = useState(false);
+
     // Updated Settings State Structure
     const [notificationSettings, setNotificationSettings] = useState({
         enabled: false,
@@ -756,43 +844,68 @@ const WeatherApp = () => {
     };
 
     // --- Init: Load Data from DB & Request Notification ---
-    useEffect(() => {
-        const initApp = async () => {
-            // Start the minimum timer for splash screen
-            const splashTimer = new Promise(resolve => setTimeout(resolve, 2500));
-
-            // Load Data Promise
-            const loadDataPromise = async () => {
-                const settings = await loadFromDB(STORE_SETTINGS);
-                const citiesData = await loadFromDB(STORE_CITIES);
-                return { settings, citiesData };
-            };
-
-            // Wait for both
-            const [_, data] = await Promise.all([splashTimer, loadDataPromise()]);
-            const { settings, citiesData } = data;
-
-            // Apply Settings
+    const initApp = async () => {
+        setSplashError(null);
+        try {
+            // Load Settings First
+            const settings = await loadFromDB(STORE_SETTINGS);
             const dm = settings.find(s => s.key === 'darkMode');
             if (dm) setDarkMode(dm.value);
-            
             const notif = settings.find(s => s.key === 'notificationSettings');
             if (notif) setNotificationSettings(notif.value);
 
-            // Apply Cities
+            // Load Cached Cities
+            const citiesData = await loadFromDB(STORE_CITIES);
             if (citiesData && citiesData.length > 0) {
                 setCities(citiesData);
                 setSelectedCityId(citiesData[0].id);
-            } else {
-                setIsModalOpen(true);
+                setSplashHasData(true);
             }
 
-            setTimeout(() => {
-                setIsAppReady(true);
-                isSettingsLoaded.current = true;
-            }, 100);
-        };
+            // Start API Update with Timeout
+            const timeoutPromise = new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('TIMEOUT')), 5000)
+            );
 
+            // Only fetch if we have cities to fetch, otherwise app is "ready" but empty
+            if (citiesData && citiesData.length > 0) {
+                 const fetchPromise = Promise.all(citiesData.map(async (city) => {
+                    const data = await fetchRawWeatherData(city.lat, city.lon);
+                    return processWeatherData(data, city.name, city.id, city.custom);
+                 }));
+
+                 // Race: API vs Timeout
+                 const updatedCities = await Promise.race([fetchPromise, timeoutPromise]);
+                 
+                 // If API wins:
+                 setCities(updatedCities);
+                 setLastUpdated(new Date());
+                 setIsAppReady(true);
+                 isSettingsLoaded.current = true;
+            } else {
+                 // No cities to update, just open
+                 setIsAppReady(true);
+                 setIsModalOpen(true); // Open add city modal if empty
+                 isSettingsLoaded.current = true;
+            }
+
+        } catch (error) {
+            console.error("Init Error:", error);
+            if (error.message === 'TIMEOUT') {
+                if (splashHasData) {
+                    setSplashError("ارتباط با سرور زمان‌بر شد.");
+                    // Allow user to choose "Continue Offline"
+                } else {
+                    setSplashError("ارتباط با سرور برقرار نشد. لطفا اینترنت خود را بررسی کنید.");
+                }
+            } else {
+                 // Network Error
+                 setSplashError("خطا در دریافت اطلاعات. لطفا اتصال اینترنت را بررسی کنید.");
+            }
+        }
+    };
+
+    useEffect(() => {
         initApp();
 
         // 3. Online/Offline Listeners
@@ -848,7 +961,7 @@ const WeatherApp = () => {
     // --- 30s Polling Logic ---
     useEffect(() => {
         const fetchAllCities = async () => {
-            if (!navigator.onLine) return; // Don't fetch if offline
+            if (!navigator.onLine || !isAppReady) return; // Don't fetch if offline or not ready
             
             const currentCities = citiesRef.current;
             const settings = notifSettingsRef.current;
@@ -931,85 +1044,7 @@ const WeatherApp = () => {
     };
 
     // --- Helper Fetch Functions (Refactored for reuse) ---
-    const fetchRawWeatherData = async (lat, lon) => {
-         // Updated API URL with Humidity and UV
-         const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&hourly=temperature_2m,relativehumidity_2m,uv_index&daily=temperature_2m_max,temperature_2m_min,weathercode,precipitation_probability_max,windspeed_10m_max,uv_index_max&timezone=auto&past_days=7&forecast_days=7`;
-         const res = await axios.get(url);
-         return res.data;
-    };
-
-    const processWeatherData = (data, name, id = Date.now(), customDays = []) => {
-        const daily = data.daily;
-        const hourlyTemps = data.hourly.temperature_2m;
-        const hourlyHumid = data.hourly.relativehumidity_2m;
-        
-        // Find index of current hour based on closest time match
-        const nowTime = new Date().getTime();
-        const hourIndex = data.hourly.time.findIndex(t => {
-            const time = new Date(t).getTime();
-            return Math.abs(time - nowTime) < 3600000; // Find closest hour within 60 mins
-        });
-        
-        // Current real data with null checks
-        const currentHumidity = (hourIndex !== -1 && hourlyHumid) ? hourlyHumid[hourIndex] : null;
-        const currentUV = (hourIndex !== -1 && data.hourly.uv_index) ? data.hourly.uv_index[hourIndex] : null;
-        
-        // For daily max UV, find today's index in daily.time
-        // We use string match "YYYY-MM-DD"
-        const todayStr = new Date().toISOString().slice(0, 10);
-        const dayIndex = data.daily.time.indexOf(todayStr);
-        // Fallback to index 7 if date match fails (usually index 7 is today in 7-past/7-future array)
-        const todayUVIndex = dayIndex !== -1 ? dayIndex : 7; 
-        const todayMaxUV = daily.uv_index_max ? daily.uv_index_max[todayUVIndex] : null;
-
-        // Calculate daily avg humidity for each day from 24h slices
-        const getDailyHumidity = (dayIdx) => {
-            if (!hourlyHumid) return 0;
-            const start = dayIdx * 24;
-            const end = start + 24;
-            const slice = hourlyHumid.slice(start, end);
-            if (slice.length === 0) return 0;
-            const sum = slice.reduce((a, b) => a + b, 0);
-            return sum / slice.length;
-        };
-
-        const allDays = daily.time.map((t, i) => ({
-            dateRaw: t,
-            dayName: getPersianDate(t).split(' ')[0],
-            fullDate: getPersianDayMonth(t),
-            high: daily.temperature_2m_max[i],
-            low: daily.temperature_2m_min[i],
-            status: getWeatherStatus(daily.weathercode[i]),
-            rainChance: daily.precipitation_probability_max[i] || 0,
-            wind: daily.windspeed_10m_max[i],
-            uv: daily.uv_index_max ? daily.uv_index_max[i] : null,
-            humidity: getDailyHumidity(i), 
-            hourly: hourlyTemps.slice(i * 24, (i + 1) * 24)
-        }));
-
-        const pastDays = allDays.slice(0, 7).reverse();
-        const futureDays = allDays.slice(7);
-
-        return {
-            id: id,
-            name: name,
-            lat: data.latitude,
-            lon: data.longitude,
-            temp: data.current_weather.temperature,
-            status: getWeatherStatus(data.current_weather.weathercode).label,
-            statusIcon: getWeatherStatus(data.current_weather.weathercode).icon,
-            high: daily.temperature_2m_max[todayUVIndex],
-            low: daily.temperature_2m_min[todayUVIndex],
-            wind: data.current_weather.windspeed,
-            humidity: currentHumidity, 
-            uv: currentUV !== null ? currentUV : todayMaxUV, // Prefer real-time UV, else max
-            feelsLike: data.current_weather.temperature, 
-            chart: futureDays[0] ? futureDays[0].hourly : [], 
-            future: futureDays,
-            past: pastDays,
-            custom: customDays
-        };
-    };
+    // REMOVED LOCAL DEFINITIONS (Moved to global scope)
 
     const handleAddCity = async (cityData) => {
         try {
@@ -1097,7 +1132,15 @@ const WeatherApp = () => {
 
     // --- RENDER ---
     
-    if (!isAppReady) return <SplashScreen darkMode={darkMode} />;
+    if (!isAppReady) {
+        return <SplashScreen 
+            darkMode={darkMode} 
+            error={splashError} 
+            onRetry={initApp} 
+            hasData={splashHasData}
+            onContinueOffline={() => setIsAppReady(true)}
+        />;
+    }
 
     if (cities.length === 0 && !isModalOpen) return null;
 

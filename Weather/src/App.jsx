@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 
+// --- آدرس بک‌اند برای همگام‌سازی کاربران ---
+const BACKEND_URL = "https://malihe-moosaee-weather-pwa.rf.gd/subscribe.php";
+
 // --- Icons (Inline SVGs) ---
 const IconBase = ({ children, ...props }) => (
     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>{children}</svg>
@@ -54,11 +57,9 @@ const saveToDB = async (storeName, data) => {
         const tx = db.transaction(storeName, 'readwrite');
         const store = tx.objectStore(storeName);
         if (Array.isArray(data)) {
-            // Clear store only for array replacement (like cities list)
             await store.clear(); 
             data.forEach(item => store.put(item));
         } else {
-             // For single object/settings
             store.put(data);
         }
         return tx.complete;
@@ -130,12 +131,10 @@ const GlobalStyles = () => {
             font-family: 'Vazirmatn', sans-serif;
             overflow: hidden;
         }
-
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: rgba(156, 163, 175, 0.5); border-radius: 10px; }
         ::-webkit-scrollbar-thumb:hover { background: rgba(156, 163, 175, 0.8); }
-
         /* --- Default Glass Panel (For Sidebar/Main) --- */
         .glass-panel {
             background: rgba(255, 255, 255, 0.25);
@@ -158,7 +157,6 @@ const GlobalStyles = () => {
             border: 1px solid rgba(255, 255, 255, 0.8);
             box-shadow: 0 20px 50px rgba(0, 0, 0, 0.2);
         }
-
         .dark .modal-glass {
             background: rgba(15, 23, 42, 0.95); /* Nearly opaque dark for dark mode */
             border: 1px solid rgba(255, 255, 255, 0.1);
@@ -169,7 +167,6 @@ const GlobalStyles = () => {
             grid-template-columns: repeat(7, 1fr);
             gap: 4px;
         }
-
         @keyframes rotation {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
@@ -198,7 +195,6 @@ const GlobalStyles = () => {
 };
 
 // --- Date Utils (Jalaali/Gregorian) ---
-// Simplified helper to convert Greg <-> Jalaali without heavy libraries
 const jalaali = {
   toJalaali: (gy, gm, gd) => {
     let g_d_m = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334];
@@ -239,8 +235,6 @@ const jalaali = {
   monthLength: (jy, jm) => {
       if (jm <= 6) return 31;
       if (jm <= 11) return 30;
-      // Simple leap year check for calendar display logic (approximate)
-      // For API accuracy we rely on the toGregorian conversion mostly.
       const isLeap = (((((jy % 33) + 1) * 683) % 2816) < 683); 
       return isLeap ? 30 : 29;
   }
@@ -328,7 +322,6 @@ const processWeatherData = (data, name, id = Date.now(), customDays = []) => {
         humidity: getDailyHumidity(i), 
         hourly: hourlyTemps.slice(i * 24, (i + 1) * 24)
     }));
-
     const pastDays = allDays.slice(0, 7).reverse();
     const futureDays = allDays.slice(7);
 
@@ -354,7 +347,6 @@ const processWeatherData = (data, name, id = Date.now(), customDays = []) => {
 };
 
 // --- Components ---
-
 const WeatherChart = ({ data, color, isHourly }) => {
     if (!data || data.length === 0) return null;
     const maxVal = Math.max(...data) + (isHourly ? 1 : 2);
@@ -371,7 +363,6 @@ const WeatherChart = ({ data, color, isHourly }) => {
     }).join(' ');
     
     const areaPath = `M0,${height} L${points} L${width},${height} Z`;
-
     return (
         <div className="w-full mt-4">
             <svg viewBox={`0 0 ${width} ${height + 30}`} className="w-full h-40 overflow-visible">
@@ -465,17 +456,13 @@ const OfflineAlertModal = ({ isOpen, onClose }) => {
 
 const InstallPromptModal = ({ isOpen, onClose, onInstall }) => {
     const [dontShow, setDontShow] = useState(false);
-
     useEffect(() => {
         if(isOpen) setDontShow(false);
     }, [isOpen]);
-
     if (!isOpen) return null;
-
     const handleClose = () => {
         onClose(dontShow); // Pass the preference back
     };
-
     return (
         <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center p-4 pointer-events-none">
             <div className="absolute inset-0 bg-black/40 backdrop-blur-sm pointer-events-auto" onClick={handleClose}></div>
@@ -496,7 +483,6 @@ const InstallPromptModal = ({ isOpen, onClose, onInstall }) => {
                     </div>
                     <span className="text-sm font-bold text-slate-600 dark:text-slate-300 select-none">دیگر نمایش نده</span>
                 </div>
-
                 <div className="flex gap-3">
                     <button onClick={handleClose} className="flex-1 py-3 text-slate-600 dark:text-slate-300 font-bold hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition-colors">
                         بعداً
@@ -512,7 +498,7 @@ const InstallPromptModal = ({ isOpen, onClose, onInstall }) => {
 
 const NotificationSettingsModal = ({ isOpen, onClose, settings, onSave }) => {
     const [localSettings, setLocalSettings] = useState(settings);
-
+    
     useEffect(() => {
         if(isOpen) setLocalSettings(settings);
     }, [isOpen, settings]);
@@ -523,6 +509,21 @@ const NotificationSettingsModal = ({ isOpen, onClose, settings, onSave }) => {
         onSave(localSettings);
         onClose();
     };
+    
+    const toggleEnabled = () => {
+        const newState = !localSettings.enabled;
+        setLocalSettings(prev => ({ ...prev, enabled: newState }));
+        
+        // Immediate OneSignal Trigger when turning ON
+        if (newState && window.OneSignalDeferred) {
+            console.log("Attempting to trigger OneSignal prompt...");
+            window.OneSignalDeferred.push(async function(OneSignal) {
+                // Try requesting permission directly
+                const accepted = await OneSignal.Notifications.requestPermission();
+                console.log("User accepted notifications:", accepted);
+            });
+        }
+    };
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -532,14 +533,28 @@ const NotificationSettingsModal = ({ isOpen, onClose, settings, onSave }) => {
                     <h3 className="text-xl font-bold flex items-center gap-2"><Bell className="w-6 h-6" /> تنظیمات برنامه</h3>
                     <button onClick={onClose}><X className="w-5 h-5 opacity-60 hover:opacity-100" /></button>
                 </div>
-
+                
                 <div className="space-y-6">
-                    <div className="p-4 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-200 rounded-xl text-sm font-bold">
-                        بخش نوتیفیکیشن در حال حاضر غیرفعال است.
+                    {/* Toggle Switch */}
+                    <div className="flex items-center justify-between bg-slate-100 dark:bg-white/5 p-4 rounded-xl cursor-pointer" onClick={toggleEnabled}>
+                        <span className="font-bold text-sm">دریافت نوتیفیکیشن</span>
+                        <div className={`w-12 h-6 rounded-full relative transition-colors duration-300 ${localSettings.enabled ? 'bg-green-500' : 'bg-slate-300 dark:bg-slate-600'}`}>
+                            <div className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-all duration-300 shadow-sm ${localSettings.enabled ? 'left-[calc(100%-1.25rem)]' : 'left-1'}`}></div>
+                        </div>
                     </div>
 
-                    <button onClick={handleSave} className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold shadow-lg">
-                        ذخیره
+                    {localSettings.enabled ? (
+                        <div className="p-4 bg-blue-50 dark:bg-blue-900/20 text-blue-800 dark:text-blue-200 rounded-xl text-sm leading-relaxed border border-blue-100 dark:border-blue-900/30">
+                            نوتیفیکیشن‌های هوشمند فعال هستند. در صورت تغییر ناگهانی دما یا بارش باران/برف به شما اطلاع داده خواهد شد.
+                        </div>
+                    ) : (
+                        <div className="p-4 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-200 rounded-xl text-sm font-bold border border-yellow-200 dark:border-yellow-900/30">
+                            بخش نوتیفیکیشن در حال حاضر غیرفعال است.
+                        </div>
+                    )}
+
+                    <button onClick={handleSave} className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold shadow-lg transition-all active:scale-[0.98]">
+                        ذخیره تنظیمات
                     </button>
                 </div>
             </div>
@@ -551,7 +566,6 @@ const AddCityModal = ({ isOpen, onClose, onAddCity }) => {
     const [input, setInput] = useState('');
     const [suggestions, setSuggestions] = useState([]);
     const [loading, setLoading] = useState(false);
-
     useEffect(() => {
         const timer = setTimeout(async () => {
             if (input.length > 2) {
@@ -572,12 +586,9 @@ const AddCityModal = ({ isOpen, onClose, onAddCity }) => {
                 setSuggestions([]);
             }
         }, 500);
-
         return () => clearTimeout(timer);
     }, [input]);
-
     if (!isOpen) return null;
-
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose}></div>
@@ -624,7 +635,6 @@ const CalendarModal = ({ isOpen, onClose, onSelectRange }) => {
             setViewDate({ year: jDate.jy, month: jDate.jm });
         }
     }, [isOpen]);
-
     const handleMonthChange = (direction) => {
         let { year, month } = viewDate;
         if (direction === 'next') {
@@ -636,7 +646,6 @@ const CalendarModal = ({ isOpen, onClose, onSelectRange }) => {
         }
         setViewDate({ year, month });
     };
-
     const handleDayClick = (day) => {
         const clickedDate = { year: viewDate.year, month: viewDate.month, day };
         
@@ -646,7 +655,6 @@ const CalendarModal = ({ isOpen, onClose, onSelectRange }) => {
             (clickedDate.year === startDay.year && clickedDate.month < startDay.month) ||
             (clickedDate.year === startDay.year && clickedDate.month === startDay.month && clickedDate.day < startDay.day)
         );
-
         if (!startDay || (startDay && endDay) || isClickedBeforeStart) {
             setStartDay(clickedDate);
             setEndDay(null);
@@ -654,16 +662,13 @@ const CalendarModal = ({ isOpen, onClose, onSelectRange }) => {
             setEndDay(clickedDate);
         }
     };
-
     const confirmSelection = () => {
         if (startDay && endDay) {
             onSelectRange(startDay, endDay);
             onClose();
         }
     };
-
     if (!isOpen) return null;
-
     // Calculate calendar grid
     const daysInMonth = jalaali.monthLength(viewDate.year, viewDate.month);
     // Determine start day of week (0=Sat, 1=Sun... in our logic, but Gregorian gives 0=Sun. 
@@ -676,10 +681,8 @@ const CalendarModal = ({ isOpen, onClose, onSelectRange }) => {
     // Pers: Sat(0), Sun(1), Mon(2), Tue(3), Wed(4), Thu(5), Fri(6)
     // Mapping: (Greg + 1) % 7
     startDayOfWeek = (startDayOfWeek + 1) % 7;
-
     const daysArray = Array.from({length: daysInMonth}, (_, i) => i + 1);
     const emptySlots = Array.from({length: startDayOfWeek}, () => null);
-
     // Helpers to check selection status
     const isSelected = (d) => {
         if (!startDay) return false;
@@ -690,7 +693,6 @@ const CalendarModal = ({ isOpen, onClose, onSelectRange }) => {
         const isEnd = endDay && current.year === endDay.year && current.month === endDay.month && current.day === endDay.day;
         
         if (isStart || isEnd) return 'edge';
-
         // Check in range
         if (startDay && endDay) {
             // Simplify comparison by converting to numeric value YYYYMMDD
@@ -701,7 +703,6 @@ const CalendarModal = ({ isOpen, onClose, onSelectRange }) => {
         }
         return false;
     };
-
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose}></div>
@@ -713,14 +714,12 @@ const CalendarModal = ({ isOpen, onClose, onSelectRange }) => {
                         <div className="font-bold text-lg">{persianMonths[viewDate.month - 1]} {toPersianDigits(viewDate.year)}</div>
                         <button onClick={() => handleMonthChange('next')} className="p-1 hover:bg-black/10 rounded-full"><ChevronLeft className="w-5 h-5" /></button>
                     </div>
-
                     <div className="mb-2 flex justify-center items-center px-2 font-bold opacity-80 min-h-[24px]">
                         <span className="text-xs font-normal opacity-70">
                             {startDay ? `${toPersianDigits(startDay.day)} ${persianMonths[startDay.month-1]}` : ''} 
                             {endDay ? ` تا ${toPersianDigits(endDay.day)} ${persianMonths[endDay.month-1]}` : ''}
                         </span>
                     </div>
-
                     <div className="calendar-grid mb-6">
                         {['ش','ی','د','س','چ','پ','ج'].map(d => <div key={d} className="text-center text-xs opacity-50 mb-2 font-bold">{d}</div>)}
                         
@@ -764,7 +763,6 @@ const DayDetailModal = ({ isOpen, onClose, day, city }) => {
                     </div>
                     <button onClick={onClose} className="p-1 bg-black/5 dark:bg-white/10 rounded-full"><X className="w-5 h-5 opacity-60 hover:opacity-100" /></button>
                 </div>
-
                 <div className="p-5 flex flex-col gap-5">
                     {/* Main Temp & Icon */}
                     <div className="flex items-center justify-between">
@@ -778,7 +776,6 @@ const DayDetailModal = ({ isOpen, onClose, day, city }) => {
                             {day.status.icon === 'Rain' && <Droplets className="w-16 h-16 text-blue-600" />}
                         </div>
                     </div>
-
                     {/* Compact Grid Details - Corrected Data */}
                     <div className="grid grid-cols-2 gap-3">
                         <div className="bg-slate-100 dark:bg-white/5 p-3 rounded-xl flex items-center gap-3">
@@ -840,7 +837,6 @@ const WeatherApp = () => {
     
     // Ref to hold the dismiss preference synchronously for the event listener
     const isInstallDismissedRef = useRef(false);
-
     // Updated Settings State Structure
     const [notificationSettings, setNotificationSettings] = useState({
         enabled: false,
@@ -855,7 +851,81 @@ const WeatherApp = () => {
     const notifSettingsRef = useRef(notificationSettings); // Need ref for polling
     const isSettingsLoaded = useRef(false);
 
-    // --- Helper to Send Notification ---
+    // --- OneSignal Initialization ---
+    useEffect(() => {
+        // --- Inject OneSignal Script Dynamically (FIX) ---
+        if (!document.querySelector('script[src*="OneSignalSDK.page.js"]')) {
+            const script = document.createElement('script');
+            script.src = "https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js";
+            script.defer = true;
+            document.head.appendChild(script);
+        }
+
+        window.OneSignalDeferred = window.OneSignalDeferred || [];
+        window.OneSignalDeferred.push(async function(OneSignal) {
+            await OneSignal.init({
+                appId: "76dec13e-31fd-441a-9613-1317588ea184",
+                safari_web_id: "web.onesignal.auto.42caa6a9-1a36-4188-9a18-8fba4e08de54",
+                notifyButton: {
+                    enable: false, // --- DISABLED RED BELL ---
+                },
+                allowLocalhostAsSecureOrigin: true, // For development/testing
+                // Explicitly point to worker just in case
+                serviceWorkerParam: { scope: '/' },
+                serviceWorkerPath: 'OneSignalSDKWorker.js',
+            });
+        });
+    }, []);
+
+    // --- Sync User with Backend (When City or Subscription Changes) ---
+    useEffect(() => {
+        const syncOneSignalUser = () => {
+             if (cities.length === 0 || !selectedCityId) return;
+             const currentCity = cities.find(c => c.id === selectedCityId);
+             if (!currentCity) return;
+
+             window.OneSignalDeferred = window.OneSignalDeferred || [];
+             window.OneSignalDeferred.push(async function(OneSignal) {
+                 if (OneSignal.User.PushSubscription.optedIn) {
+                     const playerId = OneSignal.User.PushSubscription.id;
+                     console.log("Syncing OneSignal User:", playerId, "City:", currentCity.name);
+                     
+                     try {
+                        await axios.post(BACKEND_URL, {
+                            playerId: playerId,
+                            lat: currentCity.lat,
+                            lon: currentCity.lon,
+                            city: currentCity.name
+                        });
+                        console.log("Synced successfully.");
+                     } catch (e) {
+                         console.error("Failed to sync user with backend:", e);
+                     }
+                 }
+             });
+        };
+
+        // Run sync immediately when dependencies change
+        syncOneSignalUser();
+
+        // Also add listener for subscription changes (e.g., user clicks Allow)
+        window.OneSignalDeferred = window.OneSignalDeferred || [];
+        window.OneSignalDeferred.push(function(OneSignal) {
+            OneSignal.User.PushSubscription.addEventListener("change", syncOneSignalUser);
+        });
+
+        return () => {
+             // Cleanup listener if possible/needed (OneSignal SDK handles this mostly, but good practice)
+             window.OneSignalDeferred.push(function(OneSignal) {
+                 // Check if removeEventListener is supported in this version of SDK wrapper, if not, it's fine.
+                 if(OneSignal.User.PushSubscription.removeEventListener) {
+                    OneSignal.User.PushSubscription.removeEventListener("change", syncOneSignalUser);
+                 }
+             });
+        };
+    }, [selectedCityId, cities]); // Re-run when user selects a different city
+
+    // --- Helper to Send Notification (Legacy Local) ---
     const sendNotification = (title, body) => {
         if (Notification.permission === 'granted' && notificationSettings.enabled) {
             if (navigator.serviceWorker && navigator.serviceWorker.controller) {
@@ -879,7 +949,6 @@ const WeatherApp = () => {
     const initApp = async () => {
         setSplashError(null);
         let hasLocalData = false;
-
         try {
             // Load Settings First
             const settings = await loadFromDB(STORE_SETTINGS);
@@ -893,7 +962,6 @@ const WeatherApp = () => {
             if (dismissed && dismissed.value === true) {
                 isInstallDismissedRef.current = true;
             }
-
             // Load Cached Cities
             const citiesData = await loadFromDB(STORE_CITIES);
             if (citiesData && citiesData.length > 0) {
@@ -902,19 +970,16 @@ const WeatherApp = () => {
                 setSplashHasData(true);
                 hasLocalData = true;
             }
-
             // Start API Update with Timeout
             const timeoutPromise = new Promise((_, reject) => 
                 setTimeout(() => reject(new Error('TIMEOUT')), 5000)
             );
-
             // Only fetch if we have cities to fetch, otherwise app is "ready" but empty
             if (citiesData && citiesData.length > 0) {
                  const fetchPromise = Promise.all(citiesData.map(async (city) => {
                     const data = await fetchRawWeatherData(city.lat, city.lon);
                     return processWeatherData(data, city.name, city.id, city.custom);
                  }));
-
                  // Race: API vs Timeout
                  const updatedCities = await Promise.race([fetchPromise, timeoutPromise]);
                  
@@ -930,7 +995,6 @@ const WeatherApp = () => {
                  setIsModalOpen(true); // Open add city modal if empty
                  isSettingsLoaded.current = true;
             }
-
         } catch (error) {
             console.error("Init Error:", error);
             // Single unified message as requested
@@ -946,7 +1010,6 @@ const WeatherApp = () => {
 
     useEffect(() => {
         initApp();
-
         // 3. Online/Offline Listeners
         const handleOnline = () => setIsOnline(true);
         const handleOffline = () => setIsOnline(false);
@@ -955,6 +1018,7 @@ const WeatherApp = () => {
         
         // 4. PWA Install Listener
         const handleInstallPrompt = (e) => {
+            console.log("Install Prompt Fired!"); // Debug Log
             e.preventDefault();
             setInstallPrompt(e);
             // Only show if not dismissed previously
@@ -963,7 +1027,6 @@ const WeatherApp = () => {
             }
         };
         window.addEventListener('beforeinstallprompt', handleInstallPrompt);
-
         return () => {
             window.removeEventListener('online', handleOnline);
             window.removeEventListener('offline', handleOffline);
@@ -975,7 +1038,6 @@ const WeatherApp = () => {
     useEffect(() => {
         citiesRef.current = cities;
     }, [cities]);
-
     useEffect(() => {
         notifSettingsRef.current = notificationSettings;
     }, [notificationSettings]);
@@ -986,7 +1048,6 @@ const WeatherApp = () => {
             saveToDB(STORE_CITIES, cities);
         }
     }, [cities]);
-
     useEffect(() => {
         // Only save to DB if initial load is complete
         if (isSettingsLoaded.current) {
@@ -1004,7 +1065,6 @@ const WeatherApp = () => {
     // --- Refactored Refresh Function for Manual Use & Polling ---
     const refreshAllCities = async (manual = false) => {
         if (manual) setIsRefreshing(true);
-
         try {
             // 1. Check navigator.onLine immediately
             if (!navigator.onLine) {
@@ -1013,17 +1073,13 @@ const WeatherApp = () => {
                 if (manual) setOfflineAlertOpen(true);
                 return;
             }
-
             const currentCities = citiesRef.current;
             const settings = notifSettingsRef.current;
-
             if (currentCities.length === 0) return;
-
             console.log("Refreshing updates...");
             
             // Track success of at least one request
             let anySuccess = false;
-
             const updatedCities = await Promise.all(currentCities.map(async (city) => {
                 try {
                     const data = await fetchRawWeatherData(city.lat, city.lon);
@@ -1048,11 +1104,9 @@ const WeatherApp = () => {
                     let shouldNotify = false;
                     let notifBody = "";
                     let newNotifState = { ...settings };
-
                     // Get selected city or first one
                     const targetCity = updatedCities[0]; 
                     const lastTemp = settings.lastNotifTemp?.[targetCity.id];
-
                     if (settings.type === 'change') {
                         // Check threshold
                         if (lastTemp !== undefined) {
@@ -1073,7 +1127,6 @@ const WeatherApp = () => {
                             notifBody = `دمای فعلی ${targetCity.name}: ${toPersianDigits(Math.round(targetCity.temp))} درجه`;
                         }
                     }
-
                     if (shouldNotify) {
                         sendNotification("وضعیت آب‌وهوا", notifBody);
                         // Update settings tracking
@@ -1125,12 +1178,10 @@ const WeatherApp = () => {
 
     // --- Helper Fetch Functions (Refactored for reuse) ---
     // REMOVED LOCAL DEFINITIONS (Moved to global scope)
-
     const handleAddCity = async (cityData) => {
         try {
             const data = await fetchRawWeatherData(cityData.lat, cityData.lon);
             const newCity = processWeatherData(data, cityData.name);
-
             setCities(prev => [...prev, newCity]);
             setSelectedCityId(newCity.id);
             setIsModalOpen(false);
@@ -1149,7 +1200,6 @@ const WeatherApp = () => {
         
         const city = cities.find(c => c.id === selectedCityId);
         if (!city) return;
-
         try {
             const sG = jalaali.toGregorian(startJDate.year, startJDate.month, startJDate.day);
             const eG = jalaali.toGregorian(endJDate.year, endJDate.month, endJDate.day);
@@ -1157,7 +1207,6 @@ const WeatherApp = () => {
             const fmt = (y, m, d) => `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
             const startStr = fmt(sG.gy, sG.gm, sG.gd);
             const endStr = fmt(eG.gy, eG.gm, eG.gd);
-
             const url = `https://api.open-meteo.com/v1/forecast?latitude=${city.lat}&longitude=${city.lon}&daily=temperature_2m_max,temperature_2m_min,weathercode,precipitation_probability_max,windspeed_10m_max,uv_index_max&hourly=temperature_2m,relativehumidity_2m&timezone=auto&start_date=${startStr}&end_date=${endStr}`;
             
             const res = await axios.get(url);
@@ -1171,7 +1220,6 @@ const WeatherApp = () => {
                 const end = start + 24;
                 const slice = hourlyHumid.slice(start, end);
                 const avgHum = slice.length ? slice.reduce((a,b)=>a+b,0)/slice.length : 0;
-
                 return {
                     dateRaw: t,
                     dayName: getPersianDate(t).split(' ')[0],
@@ -1186,7 +1234,6 @@ const WeatherApp = () => {
                     hourly: hourlyTemps.slice(i * 24, (i + 1) * 24)
                 };
             });
-
             setCities(prev => prev.map(c => c.id === selectedCityId ? { ...c, custom: customDays } : c));
             setApiSuccess(true);
         } catch(e) {
@@ -1227,20 +1274,23 @@ const WeatherApp = () => {
             onContinueOffline={() => setIsAppReady(true)}
         />;
     }
-
     if (cities.length === 0 && !isModalOpen) return null;
-
     return (
         <div className={`relative w-full h-[100dvh] flex flex-col lg:flex-row overflow-x-hidden transition-colors duration-700 ${bgGradient} text-slate-800 dark:text-slate-100`} dir="rtl">
             <GlobalStyles />
             
             {isSidebarOpen && <div className="fixed inset-0 bg-black/50 z-40 lg:hidden backdrop-blur-sm" onClick={() => setIsSidebarOpen(false)}></div>}
-
             {/* Sidebar */}
             <aside className={`fixed lg:relative top-0 right-0 h-full w-80 z-50 lg:z-auto flex flex-col glass-panel border-l-0 border-y-0 transform transition-transform duration-300 ease-in-out ${isSidebarOpen ? 'translate-x-0' : 'translate-x-full lg:translate-x-0'} bg-white/10 dark:bg-slate-900/90 lg:bg-transparent`}>
                 <div className="p-6 flex items-center justify-between">
                     <h2 className="text-xl font-black tracking-tight">هواشناسی</h2>
                     <div className="flex gap-2">
+                        {/* --- CHANGE: Allow Install Button even if installPrompt is not ready yet on mobile, 
+                           but disable it or just show logic. 
+                           Better: Only show if installPrompt exists OR if standalone check fails (but that's complex without prompt).
+                           For now, kept as is but added debug log above.
+                           Ideally, manifest.json must be present for this to fire on Android.
+                        */}
                         {installPrompt && (
                              <button onClick={handleInstallClick} className="w-8 h-8 rounded-full bg-blue-500/20 hover:bg-blue-500/40 text-blue-500 flex items-center justify-center transition-all shadow-sm animate-pulse" title="نصب اپلیکیشن">
                                 <Download className="w-5 h-5" />

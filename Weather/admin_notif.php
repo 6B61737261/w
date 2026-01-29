@@ -1,10 +1,11 @@
 <?php
 session_start();
 
-// --- تنظیمات امنیتی و کلیدها (دقیقاً مشابه Cron) ---
+// --- تنظیمات امنیتی و کلیدها ---
 define('ADMIN_PASSWORD', 'admin123'); // رمز ورود به پنل
 define('DB_FILE', 'users.json');
 
+// این کلیدها باید دقیقاً با کلیدهای فایل Cron و App.jsx یکی باشند
 define('VAPID_PUBLIC_KEY', 'BOynOrGcnYCIJ1cdi-9p22dd8zV0n-eC_oN4bKqZ6y8mG7r-X6s1tC3eO9p4qL1zT8rV2n0mJ5kL8xP3qR6w');
 define('VAPID_PRIVATE_KEY', 'q9p8o7n6m5l4k3j2i1h0g9f8e7d6c5b4a3Z2Y1X0W'); 
 define('VAPID_SUBJECT', 'mailto:admin@weatherapp.com');
@@ -37,8 +38,8 @@ if (!isset($_SESSION['logged_in']) || $_SESSION['logged_in'] !== true) {
         <style>
             body { font-family: system-ui, -apple-system, sans-serif; background: #f1f5f9; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
             .login-box { background: white; padding: 2rem; rounded: 1rem; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); width: 100%; max-width: 400px; border-radius: 12px; }
-            input { width: 100%; padding: 0.75rem; margin-bottom: 1rem; border: 1px solid #cbd5e1; border-radius: 0.5rem; box-sizing: border-box; }
-            button { width: 100%; padding: 0.75rem; background: #3b82f6; color: white; border: none; border-radius: 0.5rem; cursor: pointer; font-weight: bold; }
+            input { width: 100%; padding: 0.75rem; margin-bottom: 1rem; border: 1px solid #cbd5e1; border-radius: 0.5rem; box-sizing: border-box; font-family: inherit; }
+            button { width: 100%; padding: 0.75rem; background: #3b82f6; color: white; border: none; border-radius: 0.5rem; cursor: pointer; font-weight: bold; font-family: inherit; }
             button:hover { background: #2563eb; }
             .error { color: #ef4444; margin-bottom: 1rem; font-size: 0.875rem; text-align: center; }
         </style>
@@ -58,13 +59,26 @@ if (!isset($_SESSION['logged_in']) || $_SESSION['logged_in'] !== true) {
     exit;
 }
 
-// --- بارگذاری دیتابیس ---
-$users = file_exists(DB_FILE) ? json_decode(file_get_contents(DB_FILE), true) : [];
+// --- اصلاح شده: بارگذاری ایمن دیتابیس ---
+$users = [];
+if (file_exists(DB_FILE)) {
+    $content = file_get_contents(DB_FILE);
+    // چک می‌کنیم فایل خالی نباشد
+    if (!empty($content)) {
+        $decoded = json_decode($content, true);
+        // چک می‌کنیم نتیجه جیسون معتبر و آرایه باشد
+        if (is_array($decoded)) {
+            $users = $decoded;
+        }
+    }
+}
+// اکنون $users قطعاً یک آرایه است (حتی اگر خالی باشد)، پس count($users) خطا نمی‌دهد.
+
 $message = "";
 
 // --- پردازش عملیات (ارسال/حذف) ---
 if (isset($_GET['action']) && isset($_GET['id'])) {
-    $id = $_GET['id']; // Endpoint is the ID
+    $id = $_GET['id'];
     
     if ($_GET['action'] === 'delete') {
         if (isset($users[$id])) {
@@ -98,7 +112,7 @@ if (isset($_GET['action']) && isset($_GET['id'])) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>پنل مدیریت هواشناسی</title>
     <style>
-        body { font-family: system-ui, -apple-system, sans-serif; background: #f8fafc; margin: 0; padding: 20px; color: #1e293b; }
+        body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; background: #f8fafc; margin: 0; padding: 20px; color: #1e293b; direction: rtl; }
         .container { max-width: 1200px; margin: 0 auto; }
         .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; background: white; padding: 1rem 1.5rem; border-radius: 12px; box-shadow: 0 1px 3px rgb(0 0 0 / 0.1); }
         h1 { margin: 0; font-size: 1.25rem; }
@@ -112,7 +126,7 @@ if (isset($_GET['action']) && isset($_GET['id'])) {
         .badge { display: inline-block; padding: 0.25rem 0.5rem; border-radius: 9999px; font-size: 0.75rem; font-weight: bold; }
         .badge-green { background: #dcfce7; color: #166534; }
         .badge-gray { background: #f1f5f9; color: #475569; }
-        .btn { display: inline-flex; align-items: center; padding: 0.4rem 0.8rem; border-radius: 6px; text-decoration: none; font-size: 0.8rem; font-weight: bold; margin-left: 0.5rem; transition: background 0.2s; border: none; cursor: pointer; }
+        .btn { display: inline-flex; align-items: center; padding: 0.4rem 0.8rem; border-radius: 6px; text-decoration: none; font-size: 0.8rem; font-weight: bold; margin-left: 0.5rem; transition: background 0.2s; border: none; cursor: pointer; font-family: inherit; }
         .btn-blue { background: #eff6ff; color: #2563eb; }
         .btn-blue:hover { background: #dbeafe; }
         .btn-red { background: #fef2f2; color: #dc2626; }
@@ -248,7 +262,8 @@ function getVapidHeader($endpoint) {
 function createVapidSignature($data) {
     $pem = convertToPem(VAPID_PRIVATE_KEY);
     $signature = '';
-    if (openssl_sign($data, $signature, $pem, OPENSSL_ALGO_SHA256)) {
+    // بررسی وجود اکستنشن اپن‌اس‌اس‌ال
+    if (function_exists('openssl_sign') && openssl_sign($data, $signature, $pem, OPENSSL_ALGO_SHA256)) {
         return base64UrlEncode(derToRaw($signature));
     }
     return null;

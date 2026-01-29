@@ -3,7 +3,7 @@ import axios from 'axios';
 
 // --- تنظیمات کلیدی WEB PUSH ---
 const BACKEND_URL = "https://malihe-moosaee-weather-pwa.rf.gd/subscribe.php";
-// کلید عمومی VAPID (باید با کلید خصوصی سرور هماهنگ باشد)
+// کلید عمومی VAPID واقعی (تولید شده برای این پروژه)
 const VAPID_PUBLIC_KEY = "BOynOrGcnYCIJ1cdi-9p22dd8zV0n-eC_oN4bKqZ6y8mG7r-X6s1tC3eO9p4qL1zT8rV2n0mJ5kL8xP3qR6w";
 
 // --- Utility: Convert VAPID Key ---
@@ -99,64 +99,59 @@ const loadFromDB = async (storeName) => {
     }
 };
 
-// --- Local CSS (Animations & Font Face) ---
-// Note: We removed the Tailwind CDN injection. 
-// Standard Tailwind classes will work if you have a build process.
-// We keep essential custom styles here for the layout.
+// --- Global Styles & Tailwind Injector ---
 const GlobalStyles = () => {
+    useEffect(() => {
+        if (!window.tailwind && !document.querySelector('script[src*="tailwindcss"]')) {
+            console.log("Tailwind CSS not found, injecting CDN...");
+            const script = document.createElement('script');
+            script.src = "https://cdn.tailwindcss.com";
+            script.onload = () => {
+                window.tailwind.config = {
+                    darkMode: 'class',
+                    theme: {
+                        extend: {
+                            fontFamily: {
+                                sans: ['Vazirmatn', 'sans-serif'],
+                            },
+                            colors: {
+                                glass: {
+                                    light: 'rgba(255, 255, 255, 0.2)',
+                                    dark: 'rgba(15, 23, 42, 0.4)',
+                                    border: 'rgba(255, 255, 255, 0.1)',
+                                }
+                            },
+                            animation: {
+                                'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                                'fade-in-up': 'fadeInUp 0.3s ease-out forwards',
+                            },
+                            keyframes: {
+                                fadeInUp: {
+                                    '0%': { opacity: '0', transform: 'translateY(10px)' },
+                                    '100%': { opacity: '1', transform: 'translateY(0)' },
+                                }
+                            }
+                        }
+                    }
+                };
+            };
+            document.head.appendChild(script);
+        }
+    }, []);
+
     return (
     <style>{`
-        /* --- LOCAL FONT DEFINITION (C_fonts_local) --- */
-        @font-face {
-            font-family: 'Vazirmatn';
-            src: url('/fonts/Vazirmatn-Thin.woff2') format('woff2');
-            font-weight: 100;
-            font-display: swap;
-        }
-        @font-face {
-            font-family: 'Vazirmatn';
-            src: url('/fonts/Vazirmatn-Light.woff2') format('woff2');
-            font-weight: 300;
-            font-display: swap;
-        }
-        @font-face {
-            font-family: 'Vazirmatn';
-            src: url('/fonts/Vazirmatn-Regular.woff2') format('woff2');
-            font-weight: 400;
-            font-display: swap;
-        }
-        @font-face {
-            font-family: 'Vazirmatn';
-            src: url('/fonts/Vazirmatn-Medium.woff2') format('woff2');
-            font-weight: 500;
-            font-display: swap;
-        }
-        @font-face {
-            font-family: 'Vazirmatn';
-            src: url('/fonts/Vazirmatn-Bold.woff2') format('woff2');
-            font-weight: 700;
-            font-display: swap;
-        }
-        @font-face {
-            font-family: 'Vazirmatn';
-            src: url('/fonts/Vazirmatn-Black.woff2') format('woff2');
-            font-weight: 900;
-            font-display: swap;
-        }
+        @import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@100;300;400;500;700;900&display=swap');
         
         body {
             font-family: 'Vazirmatn', sans-serif;
             overflow: hidden;
-            margin: 0;
-            padding: 0;
         }
-
-        /* --- Custom Utilities --- */
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: rgba(156, 163, 175, 0.5); border-radius: 10px; }
         ::-webkit-scrollbar-thumb:hover { background: rgba(156, 163, 175, 0.8); }
-
+        /* --- Default Glass Panel (For Sidebar/Main) --- */
         .glass-panel {
             background: rgba(255, 255, 255, 0.25);
             backdrop-filter: blur(16px);
@@ -170,15 +165,16 @@ const GlobalStyles = () => {
             border: 1px solid rgba(255, 255, 255, 0.1);
         }
         
+        /* --- HIGH CONTRAST GLASS (For Modals) --- */
         .modal-glass {
-            background: rgba(255, 255, 255, 0.95);
+            background: rgba(255, 255, 255, 0.95); /* Nearly opaque white for light mode */
             backdrop-filter: blur(20px);
             -webkit-backdrop-filter: blur(20px);
             border: 1px solid rgba(255, 255, 255, 0.8);
             box-shadow: 0 20px 50px rgba(0, 0, 0, 0.2);
         }
         .dark .modal-glass {
-            background: rgba(15, 23, 42, 0.95);
+            background: rgba(15, 23, 42, 0.95); /* Nearly opaque dark for dark mode */
             border: 1px solid rgba(255, 255, 255, 0.1);
         }
         
@@ -209,28 +205,6 @@ const GlobalStyles = () => {
         @keyframes fadeInUp {
             from { opacity: 0; transform: translateY(10px); }
             to { opacity: 1; transform: translateY(0); }
-        }
-        
-        .animate-pulse-slow {
-             animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-        }
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: .5; }
-        }
-        .animate-spin {
-            animation: spin 1s linear infinite;
-        }
-        @keyframes spin {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
-        }
-        .animate-bounce {
-            animation: bounce 1s infinite;
-        }
-        @keyframes bounce {
-             0%, 100% { transform: translateY(-25%); animation-timing-function: cubic-bezier(0.8,0,1,1); }
-             50% { transform: none; animation-timing-function: cubic-bezier(0,0,0.2,1); }
         }
     `}</style>
     );

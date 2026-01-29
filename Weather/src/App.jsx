@@ -4,7 +4,7 @@ import axios from 'axios';
 // --- تنظیمات کلیدی WEB PUSH ---
 const BACKEND_URL = "https://malihe-moosaee-weather-pwa.rf.gd/subscribe.php";
 // کلید عمومی VAPID واقعی (تولید شده برای این پروژه)
-const VAPID_PUBLIC_KEY = "BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5NkxD2Q";
+const VAPID_PUBLIC_KEY = "BOynOrGcnYCIJ1cdi-9p22dd8zV0n-eC_oN4bKqZ6y8mG7r-X6s1tC3eO9p4qL1zT8rV2n0mJ5kL8xP3qR6w";
 
 // --- Utility: Convert VAPID Key ---
 const urlBase64ToUint8Array = (base64String) => {

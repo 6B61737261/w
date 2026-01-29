@@ -1,24 +1,32 @@
 <?php
-// اجازه دسترسی از دامین‌های دیگر (CORS) - برای ارتباط با فرانت‌اند
+// تنظیمات CORS و هدرها
 header("Access-Control-Allow-Origin: *");
 header("Content-Type: application/json; charset=UTF-8");
-header("Access-Control-Allow-Methods: POST");
+header("Access-Control-Allow-Methods: POST, OPTIONS");
 header("Access-Control-Allow-Headers: Content-Type, Access-Control-Allow-Headers, Authorization, X-Requested-With");
 
-// دریافت داده‌های JSON ارسال شده از سمت React
-$input = file_get_contents("php://input");
-$data = json_decode($input);
+// مدیریت درخواست‌های پیش‌پرواز (Preflight)
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    http_response_code(200);
+    exit();
+}
 
-// بررسی اعتبار داده‌ها
+// دریافت داده‌های JSON
+$input = file_get_contents("php://input");
+$data = json_decode($input, true);
+
+// اعتبارسنجی داده‌های ورودی
+// ما به آبجکت subscription (شامل endpoint و keys)، مختصات و نام شهر نیاز داریم
 if (
-    !empty($data->playerId) && 
-    !empty($data->lat) && 
-    !empty($data->lon)
+    isset($data['subscription']) && 
+    isset($data['subscription']['endpoint']) &&
+    isset($data['lat']) && 
+    isset($data['lon'])
 ) {
-    $file = 'users.json';
+    $file = 'users.json'; // نام فایل دیتابیس طبق دستور شما
     $users = [];
 
-    // اگر فایل دیتابیس وجود دارد، آن را بخوان
+    // خواندن فایل موجود اگر وجود داشته باشد
     if (file_exists($file)) {
         $jsonContent = file_get_contents($file);
         $users = json_decode($jsonContent, true);
@@ -27,25 +35,34 @@ if (
         }
     }
 
-    // افزودن یا آپدیت کاربر بر اساس playerId (شناسه یکتا)
-    $users[$data->playerId] = [
-        'lat' => floatval($data->lat),
-        'lon' => floatval($data->lon),
-        'city' => isset($data->city) ? $data->city : 'ناشناس',
-        'last_temp' => null,      // آخرین دمای ثبت شده برای مقایسه
-        'last_notif' => 0         // زمان آخرین نوتیفیکیشن ارسالی
+    // استفاده از endpoint به عنوان کلید یکتا (چون playerId وان‌سیگنال حذف شده است)
+    $endpoint = $data['subscription']['endpoint'];
+    
+    // حفظ اطلاعات قبلی (مثل آخرین دمای ثبت شده و زمان آخرین نوتیفیکیشن)
+    $existingData = isset($users[$endpoint]) ? $users[$endpoint] : [];
+    
+    // آماده‌سازی داده‌های جدید
+    $users[$endpoint] = [
+        'subscription' => $data['subscription'], // ذخیره کل آبجکت اشتراک برای Web Push
+        'lat' => floatval($data['lat']),
+        'lon' => floatval($data['lon']),
+        'city' => isset($data['city']) ? htmlspecialchars($data['city']) : 'ناشناس',
+        'settings' => isset($data['settings']) ? $data['settings'] : [], // تنظیمات کاربر (مثل آستانه تغییر دما)
+        'last_temp' => isset($existingData['last_temp']) ? $existingData['last_temp'] : null,
+        'last_notif' => isset($existingData['last_notif']) ? $existingData['last_notif'] : 0,
+        'updated_at' => time()
     ];
 
-    // ذخیره مجدد در فایل
+    // ذخیره در فایل
     if(file_put_contents($file, json_encode($users, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE))) {
         http_response_code(200);
-        echo json_encode(["message" => "User subscribed successfully.", "status" => "success"]);
+        echo json_encode(["status" => "success", "message" => "Subscription updated successfully"]);
     } else {
         http_response_code(500);
-        echo json_encode(["message" => "Failed to save data. Check file permissions.", "status" => "error"]);
+        echo json_encode(["status" => "error", "message" => "Failed to save data"]);
     }
 } else {
     http_response_code(400);
-    echo json_encode(["message" => "Incomplete data. Need playerId, lat, and lon.", "status" => "error"]);
+    echo json_encode(["status" => "error", "message" => "Invalid input data"]);
 }
 ?>

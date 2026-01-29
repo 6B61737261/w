@@ -1,8 +1,24 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 
-// --- آدرس بک‌اند برای همگام‌سازی کاربران ---
+// --- تنظیمات کلیدی WEB PUSH ---
 const BACKEND_URL = "https://malihe-moosaee-weather-pwa.rf.gd/subscribe.php";
+// کلید عمومی VAPID واقعی (تولید شده برای این پروژه)
+const VAPID_PUBLIC_KEY = "BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5NkxD2Q";
+
+// --- Utility: Convert VAPID Key ---
+const urlBase64ToUint8Array = (base64String) => {
+    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding)
+        .replace(/-/g, '+')
+        .replace(/_/g, '/');
+    const rawData = window.atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+    for (let i = 0; i < rawData.length; ++i) {
+        outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
+};
 
 // --- Icons (Inline SVGs) ---
 const IconBase = ({ children, ...props }) => (
@@ -510,18 +526,34 @@ const NotificationSettingsModal = ({ isOpen, onClose, settings, onSave }) => {
         onClose();
     };
     
-    const toggleEnabled = () => {
-        const newState = !localSettings.enabled;
-        setLocalSettings(prev => ({ ...prev, enabled: newState }));
-        
-        // Immediate OneSignal Trigger when turning ON
-        if (newState && window.OneSignalDeferred) {
-            console.log("Attempting to trigger OneSignal prompt...");
-            window.OneSignalDeferred.push(async function(OneSignal) {
-                // Try requesting permission directly
-                const accepted = await OneSignal.Notifications.requestPermission();
-                console.log("User accepted notifications:", accepted);
-            });
+    // --- UPDATED TOGGLE LOGIC FOR NATIVE WEB PUSH ---
+    const toggleEnabled = async () => {
+        if (!localSettings.enabled) {
+            // Turning ON
+            try {
+                const permission = await Notification.requestPermission();
+                if (permission === 'granted') {
+                    // Check if SW is ready
+                    if ('serviceWorker' in navigator) {
+                        const registration = await navigator.serviceWorker.ready;
+                        if (!registration) {
+                            alert("سرویس ورکر هنوز آماده نیست. لطفا صفحه را رفرش کنید.");
+                            return;
+                        }
+                        setLocalSettings(prev => ({ ...prev, enabled: true }));
+                    } else {
+                        alert("مرورگر شما از نوتیفیکیشن پشتیبانی نمی‌کند.");
+                    }
+                } else {
+                    alert("اجازه ارسال نوتیفیکیشن داده نشد.");
+                }
+            } catch (error) {
+                console.error("Push Permission Error", error);
+                alert("خطا در دریافت مجوز نوتیفیکیشن.");
+            }
+        } else {
+            // Turning OFF
+            setLocalSettings(prev => ({ ...prev, enabled: false }));
         }
     };
 
@@ -851,79 +883,60 @@ const WeatherApp = () => {
     const notifSettingsRef = useRef(notificationSettings); // Need ref for polling
     const isSettingsLoaded = useRef(false);
 
-    // --- OneSignal Initialization ---
+    // --- Web Push: Sync Logic (Modified) ---
     useEffect(() => {
-        // --- Inject OneSignal Script Dynamically (FIX) ---
-        if (!document.querySelector('script[src*="OneSignalSDK.page.js"]')) {
-            const script = document.createElement('script');
-            script.src = "https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js";
-            script.defer = true;
-            document.head.appendChild(script);
-        }
+        const syncWebPush = async () => {
+            // Check prerequisites: cities loaded, city selected, settings loaded
+            if (cities.length === 0 || !selectedCityId || !isSettingsLoaded.current) return;
+            
+            const currentCity = cities.find(c => c.id === selectedCityId);
+            if (!currentCity) return;
 
-        window.OneSignalDeferred = window.OneSignalDeferred || [];
-        window.OneSignalDeferred.push(async function(OneSignal) {
-            await OneSignal.init({
-                appId: "76dec13e-31fd-441a-9613-1317588ea184",
-                safari_web_id: "web.onesignal.auto.42caa6a9-1a36-4188-9a18-8fba4e08de54",
-                notifyButton: {
-                    enable: false, // --- DISABLED RED BELL ---
-                },
-                allowLocalhostAsSecureOrigin: true, // For development/testing
-                // Explicitly point to worker just in case
-                serviceWorkerParam: { scope: '/' },
-                serviceWorkerPath: 'OneSignalSDKWorker.js',
-            });
-        });
-    }, []);
+            // If notifications are enabled, ensure we have a subscription and sync with backend
+            if (notificationSettings.enabled) {
+                if ('serviceWorker' in navigator && 'PushManager' in window) {
+                    try {
+                        const registration = await navigator.serviceWorker.ready;
+                        
+                        // 1. Get or Create Subscription
+                        let subscription = await registration.pushManager.getSubscription();
+                        if (!subscription) {
+                            subscription = await registration.pushManager.subscribe({
+                                userVisibleOnly: true,
+                                applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+                            });
+                        }
 
-    // --- Sync User with Backend (When City or Subscription Changes) ---
-    useEffect(() => {
-        const syncOneSignalUser = () => {
-             if (cities.length === 0 || !selectedCityId) return;
-             const currentCity = cities.find(c => c.id === selectedCityId);
-             if (!currentCity) return;
-
-             window.OneSignalDeferred = window.OneSignalDeferred || [];
-             window.OneSignalDeferred.push(async function(OneSignal) {
-                 if (OneSignal.User.PushSubscription.optedIn) {
-                     const playerId = OneSignal.User.PushSubscription.id;
-                     console.log("Syncing OneSignal User:", playerId, "City:", currentCity.name);
-                     
-                     try {
-                        await axios.post(BACKEND_URL, {
-                            playerId: playerId,
+                        // 2. Prepare Payload
+                        const payload = {
+                            subscription: subscription, // Contains endpoint, keys (p256dh, auth)
                             lat: currentCity.lat,
                             lon: currentCity.lon,
-                            city: currentCity.name
-                        });
+                            city: currentCity.name,
+                            settings: notificationSettings
+                        };
+
+                        console.log("Syncing Push Subscription...", payload);
+                        
+                        // 3. Send to Backend
+                        await axios.post(BACKEND_URL, payload);
                         console.log("Synced successfully.");
-                     } catch (e) {
-                         console.error("Failed to sync user with backend:", e);
-                     }
-                 }
-             });
+
+                    } catch (error) {
+                        console.error("Web Push Sync Error:", error);
+                        // Optional: Disable notifications visually if subscription fails hard
+                    }
+                }
+            } else {
+                // Logic for when disabled? 
+                // We can optionally send a "delete" request, but usually just stop sending is enough.
+                // For completeness, we could send { subscription: ..., enabled: false } if needed.
+            }
         };
 
-        // Run sync immediately when dependencies change
-        syncOneSignalUser();
+        syncWebPush();
 
-        // Also add listener for subscription changes (e.g., user clicks Allow)
-        window.OneSignalDeferred = window.OneSignalDeferred || [];
-        window.OneSignalDeferred.push(function(OneSignal) {
-            OneSignal.User.PushSubscription.addEventListener("change", syncOneSignalUser);
-        });
-
-        return () => {
-             // Cleanup listener if possible/needed (OneSignal SDK handles this mostly, but good practice)
-             window.OneSignalDeferred.push(function(OneSignal) {
-                 // Check if removeEventListener is supported in this version of SDK wrapper, if not, it's fine.
-                 if(OneSignal.User.PushSubscription.removeEventListener) {
-                    OneSignal.User.PushSubscription.removeEventListener("change", syncOneSignalUser);
-                 }
-             });
-        };
-    }, [selectedCityId, cities]); // Re-run when user selects a different city
+    }, [selectedCityId, cities, notificationSettings]); // Run when city or settings change
 
     // --- Helper to Send Notification (Legacy Local) ---
     const sendNotification = (title, body) => {
@@ -945,10 +958,22 @@ const WeatherApp = () => {
         }
     };
 
-    // --- Init: Load Data from DB & Request Notification ---
+    // --- Init: Load Data from DB & Register SW ---
     const initApp = async () => {
         setSplashError(null);
         let hasLocalData = false;
+
+        // --- 1. Register Service Worker ---
+        if ('serviceWorker' in navigator) {
+            try {
+                // We assume sw.js will be in the root (created in next steps)
+                const reg = await navigator.serviceWorker.register('/sw.js');
+                console.log('Service Worker Registered:', reg.scope);
+            } catch (err) {
+                console.error('Service Worker Registration Failed:', err);
+            }
+        }
+
         try {
             // Load Settings First
             const settings = await loadFromDB(STORE_SETTINGS);

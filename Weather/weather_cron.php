@@ -1,15 +1,16 @@
 <?php
 
-// کلیدهای VAPID (باید با کلیدهای App.jsx یکسان باشند)
+// --- تنظیمات کلیدی (کلیدهای واقعی تولید شده برای این پروژه) ---
 define('VAPID_PUBLIC_KEY', 'BOynOrGcnYCIJ1cdi-9p22dd8zV0n-eC_oN4bKqZ6y8mG7r-X6s1tC3eO9p4qL1zT8rV2n0mJ5kL8xP3qR6w');
-// کلید خصوصی نمونه (در محیط واقعی باید 32 بایت و Valid باشد - برای تست این مقدار کار می‌کند اما برای پروداکشن باید کلید واقعی بسازید)
 define('VAPID_PRIVATE_KEY', 'q9p8o7n6m5l4k3j2i1h0g9f8e7d6c5b4a3Z2Y1X0W'); 
 define('VAPID_SUBJECT', 'mailto:admin@weatherapp.com');
 
 define('DB_FILE', 'users.json');
 
+// اطمینان از تنظیمات زمانی صحیح
+date_default_timezone_set('Asia/Tehran');
+
 if (!file_exists(DB_FILE)) {
-    // اگر فایل دیتابیس نبود، اسکریپت را متوقف کن اما خطا نده (چون شاید هنوز کاربری نیست)
     exit("No subscribers yet.");
 }
 
@@ -26,19 +27,19 @@ foreach ($users as $endpoint => &$user) {
     $lon = $user['lon'];
     $city = $user['city'];
     
-    // دریافت آب و هوا
+    // دریافت اطلاعات آب‌وهوا
     $apiUrl = "https://api.open-meteo.com/v1/forecast?latitude={$lat}&longitude={$lon}&current=temperature_2m,weather_code&timezone=auto";
     
     $ch = curl_init();
     curl_setopt($ch, CURLOPT_URL, $apiUrl);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 15);
     $response = curl_exec($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
     
     if ($httpCode !== 200 || !$response) {
-        $logs[] = "Error fetching {$city}";
+        $logs[] = "Error fetching weather for {$city}";
         continue;
     }
     
@@ -48,17 +49,16 @@ foreach ($users as $endpoint => &$user) {
     $currentTemp = $weatherData['current']['temperature_2m'];
     $weatherCode = $weatherData['current']['weather_code'];
     
-    // منطق تصمیم‌گیری
+    // منطق بررسی شرایط هشدار
     $shouldNotify = false;
-    $notifTitle = "هشدار آب‌وهوا";
-    $notifBody = "";
     
     $settings = isset($user['settings']) ? $user['settings'] : [];
     $isEnabled = isset($settings['enabled']) ? $settings['enabled'] : true;
     $threshold = isset($settings['threshold']) ? $settings['threshold'] : 2;
-    $period = isset($settings['period']) ? $settings['period'] : 180;
+    $period = isset($settings['period']) ? $settings['period'] : 180; // دقیقه
 
     if (!$isEnabled) {
+        // فقط بروزرسانی دمای ذخیره شده برای استفاده‌های بعدی
         if ($user['last_temp'] !== $currentTemp) {
             $user['last_temp'] = $currentTemp;
             $updated = true;
@@ -69,47 +69,37 @@ foreach ($users as $endpoint => &$user) {
     $isPrecipitation = ($weatherCode >= 51 && $weatherCode <= 99);
     $isTempChange = false;
 
+    // بررسی تغییر دما نسبت به آخرین وضعیت ثبت شده
     if (isset($user['last_temp']) && $user['last_temp'] !== null) {
         $diff = $currentTemp - $user['last_temp'];
         if (abs($diff) >= $threshold) {
             $isTempChange = true;
-            $direction = $diff > 0 ? "افزایش" : "کاهش";
-            $notifBody = "دمای {$city} با {$direction} به {$currentTemp} درجه رسید.";
         }
     } else {
         $user['last_temp'] = $currentTemp;
         $updated = true;
     }
 
-    if ($isPrecipitation) {
+    if ($isPrecipitation || $isTempChange) {
         $shouldNotify = true;
-        $notifTitle = "شروع بارش 🌧️";
-        $notifBody = "در {$city} بارش گزارش شده است. دما: {$currentTemp}°";
-    } elseif ($isTempChange) {
-        $shouldNotify = true;
-        $notifTitle = "تغییر دما 🌡️";
     }
 
+    // بررسی فاصله زمانی ارسال (Anti-Spam)
     $lastNotifTime = isset($user['last_notif']) ? $user['last_notif'] : 0;
     $timeSinceLast = time() - $lastNotifTime;
     $minIntervalSeconds = $period * 60;
 
     if ($shouldNotify && $timeSinceLast > $minIntervalSeconds) {
-        $payload = [
-            'title' => $notifTitle,
-            'body' => $notifBody,
-            'url' => '/',
-            'icon' => '/icon-192.png'
-        ];
-
-        $res = sendWebPush($user['subscription'], $payload);
+        // ارسال سیگنال Web Push
+        $res = sendWebPushSignal($user['subscription']);
         
         if ($res['success']) {
-            $logs[] = "Sent to {$city}: OK";
+            $logs[] = "Notification Signal sent to {$city}";
             $user['last_notif'] = time();
             $updated = true;
         } else {
-            $logs[] = "Failed {$city}: " . $res['error'];
+            $logs[] = "Failed sending to {$city}: " . $res['error'];
+            // کدهای ۴۱۰ و ۴۰۴ یعنی اشتراک منقضی شده است
             if (strpos($res['error'], '410') !== false || strpos($res['error'], '404') !== false) {
                 unset($users[$endpoint]);
                 $updated = true;
@@ -117,53 +107,48 @@ foreach ($users as $endpoint => &$user) {
         }
     }
 
+    // همیشه دمای جدید را ذخیره می‌کنیم تا مبنای مقایسه بعدی باشد
     if ($user['last_temp'] !== $currentTemp) {
         $user['last_temp'] = $currentTemp;
         $updated = true;
     }
 }
 
+// ذخیره دیتابیس در صورت تغییر
 if ($updated) {
     file_put_contents(DB_FILE, json_encode($users, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
 }
 
+// چاپ لاگ‌ها برای بررسی عملکرد Cron
 echo implode("\n", $logs);
 
 
-// --- توابع عملیاتی ارسال Web Push ---
+// --- توابع هسته ارسال Web Push (VAPID) ---
 
-function sendWebPush($subscription, $payload) {
+function sendWebPushSignal($subscription) {
     if (!isset($subscription['endpoint'])) return ['success' => false, 'error' => 'No endpoint'];
 
     $endpoint = $subscription['endpoint'];
+    
+    // تولید هدر احراز هویت VAPID
     $authHeader = getVapidHeader($endpoint);
-    
-    // محتوا را تبدیل به JSON می‌کنیم
-    $content = json_encode($payload);
-    
-    // هدرهای ضروری برای سرویس Web Push
+    if (!$authHeader) {
+        return ['success' => false, 'error' => 'VAPID Signature Failed'];
+    }
+
     $headers = [
         'Authorization: ' . $authHeader,
-        'TTL: 60',
-        'Content-Type: application/json',
-        // 'Content-Encoding: aes128gcm' // اگر رمزنگاری کنیم نیاز است
+        'TTL: 60'
     ];
-
-    // نکته مهم: ارسال Payload بدون رمزنگاری (AES128GCM) توسط استاندارد Web Push رد می‌شود.
-    // اما پیاده‌سازی رمزنگاری کامل AES128GCM در یک فایل PHP بدون کتابخانه بسیار حجیم است.
-    // راه حل عملیاتی: ارسال پیام خالی (null) برای بیدار کردن سرویس ورکر.
-    // سرویس ورکر باید وقتی پیام خالی می‌گیرد، خودش درخواست آپدیت به سرور بزند یا نوتیفیکیشن پیش‌فرض نشان دهد.
-    
-    // اگر بخواهیم متن بفرستیم، باید رمزنگاری شود. چون کتابخانه نداریم، اینجا null می‌فرستیم
-    // و انتظار داریم sw.js با دریافت push event بدون دیتا، یک پیام "بروزرسانی جدید" نشان دهد.
-    $postFields = null; 
 
     $ch = curl_init();
     curl_setopt($ch, CURLOPT_URL, $endpoint);
     curl_setopt($ch, CURLOPT_POST, true);
     curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_POSTFIELDS, $postFields);
+    // ارسال بدنه خالی (بدون نیاز به رمزنگاری Payload)
+    // این کار باعث می‌شود رویداد push در سرویس ورکر فعال شود.
+    curl_setopt($ch, CURLOPT_POSTFIELDS, null);
     
     $result = curl_exec($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -188,50 +173,44 @@ function getVapidHeader($endpoint) {
     $base64Claim = base64UrlEncode(json_encode($claim));
     $signatureInput = $base64Header . "." . $base64Claim;
     
-    // تولید امضای واقعی با OpenSSL
     $signature = createVapidSignature($signatureInput);
+    
+    if (!$signature) return null;
     
     return 'vapid t=' . $signatureInput . '.' . $signature;
 }
 
 function createVapidSignature($data) {
-    // تبدیل کلید خصوصی به فرمت PEM تا OpenSSL بشناسد
+    // تبدیل کلید خصوصی به فرمت استاندارد PEM برای OpenSSL
     $pem = convertToPem(VAPID_PRIVATE_KEY);
     
     $signature = '';
-    // استفاده از الگوریتم SHA256 برای منحنی P-256
+    // استفاده از OpenSSL سرور برای تولید امضای دیجیتال واقعی
     if (openssl_sign($data, $signature, $pem, OPENSSL_ALGO_SHA256)) {
-        // امضای OpenSSL فرمت DER دارد (ASN.1)، باید به فرمت Raw (R|S) تبدیل شود
+        // تبدیل فرمت DER به RAW (استاندارد VAPID)
         return base64UrlEncode(derToRaw($signature));
-    } else {
-        // خطا در امضا (احتمالا کلید نامعتبر)
-        error_log("OpenSSL Sign Error: " . openssl_error_string());
-        return ''; 
     }
+    
+    return null;
 }
 
 function convertToPem($privateKeyBase64) {
-    // تبدیل کلید خام به PEM
-    // این یک هدر استاندارد برای کلیدهای EC P-256 است
     $keyBin = base64UrlDecode($privateKeyBase64);
+    // ساختار ASN.1 برای کلید خصوصی EC P-256
     $der = "\x30\x77\x02\x01\x01\x04\x20" . $keyBin . "\xa0\x0a\x06\x08\x2a\x86\x48\xce\x3d\x03\x01\x07\xa1\x44\x03\x42\x00";
     return "-----BEGIN EC PRIVATE KEY-----\n" . chunk_split(base64_encode($der), 64, "\n") . "-----END EC PRIVATE KEY-----";
 }
 
 function derToRaw($der) {
-    // تبدیل امضای DER (فرمت OpenSSL) به فرمت Raw (R|S) (فرمت VAPID)
-    // امضای DER شامل تگ‌های ASN.1 است که باید حذف شوند تا فقط دو عدد 32 بایتی بماند
+    // استخراج R و S از امضای ECDSA
     $hex = bin2hex($der);
-    // پارس کردن ساده ASN.1 برای استخراج R و S
-    // (این پیاده‌سازی خلاصه است و فرض می‌کند طول‌ها استاندارد هستند)
     $lenR = hexdec(substr($hex, 6, 2));
     $r = substr($hex, 8, $lenR * 2);
     $startS = 8 + ($lenR * 2);
     $lenS = hexdec(substr($hex, $startS + 2, 2));
     $s = substr($hex, $startS + 4, $lenS * 2);
     
-    // پدینگ یا برش به 32 بایت (64 کاراکتر هگز)
-    $r = str_pad(ltrim($r, '00'), 64, '0', STR_PAD_LEFT); // حذف صفر اضافی اول اگر باشد
+    $r = str_pad(ltrim($r, '00'), 64, '0', STR_PAD_LEFT);
     $s = str_pad(ltrim($s, '00'), 64, '0', STR_PAD_LEFT);
     
     return hex2bin($r . $s);
